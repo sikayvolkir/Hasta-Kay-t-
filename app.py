@@ -356,7 +356,6 @@ elif st.session_state.sayfa == "hasta_detay":
             for islem in islemler:
                 with st.expander(f"🗓️ {islem.get('islem_tarihi')} - {islem.get('islem_turu')}"):
                     
-                    # Düzenleme Modu Kontrolü
                     if st.session_state.duzenlenen_islem_id == islem['id']:
                         st.markdown("### ✏️ İşlemi Düzenle")
                         
@@ -371,14 +370,12 @@ elif st.session_state.sayfa == "hasta_detay":
                                 existing_not = islem.get("hekim_notu") or ""
                                 bugun_str = datetime.date.today().strftime('%d.%m.%Y')
                                 
-                                # Tarihli not ekleme
                                 if yeni_ek_not.strip():
                                     ek_metin = f"\n[{bugun_str} Ek Not]: {yeni_ek_not.strip()}"
                                     yeni_toplam_not = existing_not + ek_metin if existing_not else f"[{bugun_str} Not]: {yeni_ek_not.strip()}"
                                 else:
                                     yeni_toplam_not = existing_not
 
-                                # Görselleri birleştirme
                                 mevcut_urls = [u.strip() for u in (islem.get("fotograf_url") or "").split(",") if u.strip()]
                                 if yeni_fotolar:
                                     for yf in yeni_fotolar:
@@ -431,4 +428,8 @@ elif st.session_state.sayfa == "hasta_detay":
 elif st.session_state.sayfa == "ayarlar":
     st.title("⚙️ Ayarlar")
 
-    tab_tur, tab_export, tab_account = st.tabs(["🏷️ İşlem Türü Y
+    tab_tur, tab_export, tab_account = st.tabs(["🏷️ Islem Turu Yonetimi", "📊 Excel Ile Disari Aktar", "👤 Hesap Yonetimi"])
+
+    with tab_tur:
+        st.subheader("Yeni İşlem Türü Ekle")
+        c_add1, c_add2 = st.col
