@@ -1,3 +1,6 @@
+gotrue
 streamlit
 supabase
+pandas
+openpyxl
 gotrue
