@@ -7,10 +7,11 @@ import io
 # --- SUPABASE BAĞLANTISI ---
 SUPABASE_URL = "https://zmamzsmfpspenhslskmq.supabase.co"
 
+# Streamlit Secrets veya Doğrudan Anahtar Okuma
 try:
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-except:
-    SUPABASE_KEY = "BURAYA_SUPABASE_ANON_KEY_DEGERINI_YAZIN"
+except Exception:
+    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptYW16c21mcHNwZW5oc2xza21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU1MTEsImV4cCI6MjEwMTQyMTUxMX0.YYXkpF9F_jk7lGzIOYtB_dOO0IV-NsuCaFUXrvinndY"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -111,7 +112,7 @@ if st.session_state.user is None:
         with st.form("register_form"):
             reg_name = st.text_input("İsim Soyisim")
             reg_email = st.text_input("E-Posta Adresi")
-            reg_pass = st.text_input("Şifre", type="password")
+            reg_pass = st.text_input("Şifre (En az 6 karakter)", type="password")
             btn_register = st.form_submit_button("Kayıt Ol")
             
             if btn_register:
@@ -126,15 +127,15 @@ if st.session_state.user is None:
                                 }
                             }
                         })
-                        st.success("✅ Kayıt başarılı! Şimdi 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
+                        st.success("✅ Kayıt başarılı! Lütfen 'Giriş Yap' sekmesinden giriş yapın.")
                     except Exception as e:
                         st.error(f"Kayıt Başarısız: {e}")
                 else:
                     st.warning("Lütfen tüm alanları doldurun.")
                     
-    st.stop() # Giriş yapılmadıysa uygulamanın geri kalanını yükleme
+    st.stop() # Giriş yapılmadıysa alt kodları çalıştırma
 
-# --- OTURUM AÇILDIĞINDA ÜST KISIM (HOŞ GELDİNİZ VE ÇIKIŞ) ---
+# --- OTURUM AÇILDIĞINDA ÜST KISIM ---
 user_fullname = st.session_state.user.user_metadata.get("full_name", "Hekim")
 user_id = st.session_state.user.id
 
@@ -142,7 +143,7 @@ col_welcome, col_logout = st.columns([3, 1])
 with col_welcome:
     st.markdown(f"### 👋 Hoş geldiniz, **{user_fullname}**")
 with col_logout:
-    if st.button("🚪 Çıkış Yap", key="btn_logout", type="secondary"):
+    if st.button("🚪 Çıkış", key="btn_logout", type="secondary"):
         supabase.auth.sign_out()
         st.session_state.user = None
         st.session_state.sayfa = "ana_sayfa"
@@ -184,7 +185,7 @@ if st.session_state.sayfa == "ana_sayfa":
 elif st.session_state.sayfa == "yeni_islem_ana":
     st.subheader("💉 Yeni İşlem Ekle")
     
-    # Sadece Giriş Yapan Kullanıcının Hastalarını Getir
+    # Sadece Giriş Yapan Kullanıcının Hastaları
     hastalar = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).order("ad_soyad").execute().data
     hasta_opsiyonlari = {"Yeni Hasta Oluştur": "YENI"}
     if hastalar:
@@ -236,6 +237,7 @@ elif st.session_state.sayfa == "yeni_islem_ana":
     if st.button("💾 İşlemi Kaydet"):
         final_hasta_id = secilen_hasta_id
         
+        # Yeni Hasta İse Önce Hastayı Ekle
         if secilen_hasta_id == "YENI":
             if yeni_ad and yeni_tel:
                 h_res = supabase.table("hastalar").insert({
@@ -244,18 +246,26 @@ elif st.session_state.sayfa == "yeni_islem_ana":
                     "kullanici_id": user_id,
                     "kayit_tarihi": datetime.datetime.now().isoformat()
                 }).execute()
-                final_hasta_id = h_res.data[0]["id"]
+                if h_res.data:
+                    final_hasta_id = h_res.data[0]["id"]
+                else:
+                    st.error("Hasta oluşturulurken bir hata oluştu.")
+                    st.stop()
             else:
                 st.error("Lütfen Ad Soyad ve Telefon alanlarını doldurun.")
                 st.stop()
                 
+        # Fotoğrafları Storage'a Yükle
         foto_url_listesi = []
         for foto in st.session_state.gecici_fotolar:
             dosya_adi = f"proc_{int(datetime.datetime.now().timestamp())}_{user_id[:5]}.png"
-            supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.read())
+            foto_bytes = foto.getvalue() if hasattr(foto, 'getvalue') else foto.read()
+            
+            supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto_bytes)
             url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
             foto_url_listesi.append(url)
 
+        # İşlem Kaydı Oluştur
         islem_data = {
             "hasta_id": final_hasta_id,
             "kullanici_id": user_id,
@@ -266,8 +276,9 @@ elif st.session_state.sayfa == "yeni_islem_ana":
         }
         supabase.table("islemler").insert(islem_data).execute()
         
-        st.toast("✅ İşlem kaydedildi!")
+        st.toast("✅ İşlem başarıyla kaydedildi!")
         st.session_state.gecici_fotolar = []
+        st.session_state.sayfa = "ana_sayfa"
         st.rerun()
 
 # --- 3. YENİ HASTA KAYIT SAYFASI ---
@@ -292,7 +303,8 @@ elif st.session_state.sayfa == "yeni_hasta":
                 foto_url = None
                 if profil_foto:
                     dosya_adi = f"p_{int(datetime.datetime.now().timestamp())}.png"
-                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, profil_foto.read())
+                    foto_bytes = profil_foto.getvalue()
+                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto_bytes)
                     foto_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
 
                 hasta_veri = {
@@ -315,17 +327,6 @@ elif st.session_state.sayfa == "hasta_listesi":
     
     f_isim = st.text_input("Hasta İsmi ile Arama")
     
-    st.write("**Tarih Seçimi / Aralığı:**")
-    col_g1, col_a1, col_y1 = st.columns(3)
-    f_g1 = col_g1.selectbox("Gün (1)", [0] + list(range(1, 32)))
-    f_a1 = col_a1.selectbox("Ay (1)", [0] + list(range(1, 13)))
-    f_y1 = col_y1.number_input("Yıl (1)", min_value=0, max_value=2099, value=0)
-
-    col_g2, col_a2, col_y2 = st.columns(3)
-    f_g2 = col_g2.selectbox("Gün (2)", [0] + list(range(1, 32)))
-    f_a2 = col_a2.selectbox("Ay (2)", [0] + list(range(1, 13)))
-    f_y2 = col_y2.number_input("Yıl (2)", min_value=0, max_value=2099, value=0)
-
     turler_resp = supabase.table("islem_turleri").select("tur_adi").execute().data
     tur_listesi = ["Tümü"] + [t["tur_adi"] for t in turler_resp] if turler_resp else ["Tümü"]
     f_islem_turu = st.selectbox("İşlem Türü Filtresi", tur_listesi)
@@ -338,10 +339,9 @@ elif st.session_state.sayfa == "hasta_listesi":
             st.session_state.liste_acik = not st.session_state.liste_acik
             
     with c_sort:
-        sirulama_secimi = st.selectbox("Sıralama Seçeneği", ["Kayıt Tarihi (Yeni > Eski)", "Alfabetik (A-Z)"])
+        sirulama_secimi = st.selectbox("Sıralama", ["Kayıt Tarihi (Yeni > Eski)", "Alfabetik (A-Z)"])
 
     if st.session_state.liste_acik:
-        # Sadece bu kullanıcının hastalarını çek
         hastalar = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).execute().data
         
         if hastalar:
@@ -450,7 +450,7 @@ elif st.session_state.sayfa == "ayarlar":
 
     st.write("---")
     st.write("### Excel Veri Yedekleme")
-    if st.button("📊 Sadece Benim Hastalarımı Excel Olarak İndir"):
+    if st.button("📊 Hastalarımı Excel Olarak İndir"):
         h_data = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).execute().data
         if h_data:
             df = pd.DataFrame(h_data)
@@ -459,3 +459,6 @@ elif st.session_state.sayfa == "ayarlar":
                 df.to_excel(writer, index=False, sheet_name='Hastalar')
             excel_data = output.getvalue()
             st.download_button(label="📥 İndirmeyi Başlat", data=excel_data, file_name="Hasta_Kayitlarim.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        else:
+            st.warning("İndirilecek kayıtlı hasta bulunamadı.")
+                                                      
