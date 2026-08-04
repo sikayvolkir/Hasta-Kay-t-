@@ -22,41 +22,57 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- TASARIM VE RENK DÜZENLEMELERİ (CSS) ---
-# Butonlar: Lacivert (#1b2a4a), Buton Yazısı: Krem (#fdfbf7)
-# Arka Plan: Krem (#fdfbf7), Diğer Yazılar: Siyah (#000000) ve Lacivert
+# --- CSS VE GÖRSEL TASARIM (DİŞ FİGÜRLERİ & RENK PALETİ) ---
 st.markdown("""
     <style>
+    /* Arka Plan Krem ve Diş Desenleri */
     .stApp {
         background-color: #fdfbf7;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="%231b2a4a" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.05"><path d="M12 2C8 2 6 5 6 8c0 3 1 6 2 9 1 2 1 4 2 5 1 0 1-2 2-4 1 2 1 4 2 4 1-1 1-3 2-5 1-3 2-6 2-9 0-3-2-6-6-6z"/></svg>');
         color: #000000;
     }
+    
+    /* Başlıklar ve Metinler */
     h1, h2, h3, h4, label, .stMarkdown {
         color: #1b2a4a !important;
     }
+
+    /* Genel Buton Tasarımları (Lacivert Arka Plan, Krem Yazı) */
     .stButton>button {
         background-color: #1b2a4a !important;
         color: #fdfbf7 !important;
-        border: none !important;
+        border: 1px solid #1b2a4a !important;
         border-radius: 8px !important;
         height: 3rem !important;
         font-size: 1rem !important;
         font-weight: 600 !important;
         width: 100% !important;
-        margin-bottom: 0.5rem !important;
+        transition: all 0.3s ease;
     }
+
     .stButton>button:hover {
-        background-color: #142038 !important;
+        background-color: #0d172a !important;
         color: #ffffff !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
+
+    /* Kırmızı Silme Butonları Özel Stili */
     div[data-testid="stButton"] button[kind="secondary"] {
         background-color: #c62828 !important;
         color: #ffffff !important;
+        border: none !important;
+    }
+
+    /* Form Elemanları */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div {
+        border-radius: 6px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE YÖNETİMİ ---
+# --- SESSION STATE BAŞLATMA ---
+if "user" not in st.session_state:
+    st.session_state.user = None
 if "sayfa" not in st.session_state:
     st.session_state.sayfa = "ana_sayfa"
 if "secili_hasta_id" not in st.session_state:
@@ -69,37 +85,107 @@ if "liste_acik" not in st.session_state:
 def sayfa_degistir(sayfa_kodu):
     st.session_state.sayfa = sayfa_kodu
 
+# --- GİRİŞ & KAYIT EKRANI ---
+if st.session_state.user is None:
+    st.markdown("<h1 style='text-align: center;'>🦷 Diş Hekimi Portal</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #1b2a4a;'>Lütfen devam etmek için giriş yapın veya kayıt olun.</p>", unsafe_allow_html=True)
+    
+    tab_login, tab_register = st.tabs(["🔐 Giriş Yap", "📝 Kayıt Ol"])
+    
+    with tab_login:
+        with st.form("login_form"):
+            login_email = st.text_input("E-Posta Adresi")
+            login_pass = st.text_input("Şifre", type="password")
+            btn_login = st.form_submit_button("Giriş Yap")
+            
+            if btn_login:
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": login_email, "password": login_pass})
+                    st.session_state.user = res.user
+                    st.toast("✅ Giriş başarılı!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Giriş Başarısız: {e}")
+                    
+    with tab_register:
+        with st.form("register_form"):
+            reg_name = st.text_input("İsim Soyisim")
+            reg_email = st.text_input("E-Posta Adresi")
+            reg_pass = st.text_input("Şifre", type="password")
+            btn_register = st.form_submit_button("Kayıt Ol")
+            
+            if btn_register:
+                if reg_name and reg_email and reg_pass:
+                    try:
+                        res = supabase.auth.sign_up({
+                            "email": reg_email,
+                            "password": reg_pass,
+                            "options": {
+                                "data": {
+                                    "full_name": reg_name
+                                }
+                            }
+                        })
+                        st.success("✅ Kayıt başarılı! Şimdi 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
+                    except Exception as e:
+                        st.error(f"Kayıt Başarısız: {e}")
+                else:
+                    st.warning("Lütfen tüm alanları doldurun.")
+                    
+    st.stop() # Giriş yapılmadıysa uygulamanın geri kalanını yükleme
+
+# --- OTURUM AÇILDIĞINDA ÜST KISIM (HOŞ GELDİNİZ VE ÇIKIŞ) ---
+user_fullname = st.session_state.user.user_metadata.get("full_name", "Hekim")
+user_id = st.session_state.user.id
+
+col_welcome, col_logout = st.columns([3, 1])
+with col_welcome:
+    st.markdown(f"### 👋 Hoş geldiniz, **{user_fullname}**")
+with col_logout:
+    if st.button("🚪 Çıkış Yap", key="btn_logout", type="secondary"):
+        supabase.auth.sign_out()
+        st.session_state.user = None
+        st.session_state.sayfa = "ana_sayfa"
+        st.rerun()
+
 # --- HER EKRANDA ANA SAYFAYA DÖN BUTONU ---
 if st.session_state.sayfa != "ana_sayfa":
     if st.button("🏠 Ana Sayfaya Dön", key="btn_ana_sayfa_ust"):
         sayfa_degistir("ana_sayfa")
         st.rerun()
 
+st.write("---")
+
 # --- 1. ANA SAYFA ---
 if st.session_state.sayfa == "ana_sayfa":
-    st.markdown("<h1 style='text-align: center;'>🦷 Diş Hekimi Takip Sistemi</h1>", unsafe_allow_html=True)
-    st.write("---")
+    st.markdown("<h2 style='text-align: center;'>🦷 Klinik Yönetim Paneli</h2>", unsafe_allow_html=True)
+    st.write("<br>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    # Yanal Yönde Ortalanmış Butonlar
+    c_left, c_center, c_right = st.columns([1, 2, 1])
+    with c_center:
         if st.button("➕ Yeni İşlem / Hasta Kaydı"):
             sayfa_degistir("yeni_islem_ana")
             st.rerun()
+            
         if st.button("👤 Yeni Hasta Kayıt"):
             sayfa_degistir("yeni_hasta")
             st.rerun()
+            
         if st.button("📋 Hasta Listesi"):
             sayfa_degistir("hasta_listesi")
             st.rerun()
+            
         if st.button("⚙️ Ayarlar"):
             sayfa_degistir("ayarlar")
             st.rerun()
 
-# --- 2. ANA SAYFADAN DOĞRUDAN YENİ İŞLEM EKLEME SAYFASI ---
+# --- 2. YENİ İŞLEM SAYFASI ---
 elif st.session_state.sayfa == "yeni_islem_ana":
-    st.subheader("💉 Yeni İşlem / Hasta Kaydı")
+    st.subheader("💉 Yeni İşlem Ekle")
     
-    hastalar = supabase.table("hastalar").select("*").order("ad_soyad").execute().data
+    # Sadece Giriş Yapan Kullanıcının Hastalarını Getir
+    hastalar = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).order("ad_soyad").execute().data
     hasta_opsiyonlari = {"Yeni Hasta Oluştur": "YENI"}
     if hastalar:
         for h in hastalar:
@@ -108,27 +194,22 @@ elif st.session_state.sayfa == "yeni_islem_ana":
     secilen_hasta_label = st.selectbox("Hasta Seçin", list(hasta_opsiyonlari.keys()))
     secilen_hasta_id = hasta_opsiyonlari[secilen_hasta_label]
     
-    # Eğer yeni hasta oluşturulacaksa isim ve tel bilgisi al
-    yeni_ad = ""
-    yeni_tel = ""
+    yeni_ad, yeni_tel = "", ""
     if secilen_hasta_id == "YENI":
         c_a1, c_a2 = st.columns(2)
         yeni_ad = c_a1.text_input("Hasta Adı Soyadı")
         yeni_tel = c_a2.text_input("Telefon Numarası")
 
-    # İşlem Tarihi (Otomatik bugünün tarihi, elle değiştirilebilir)
     islem_tarihi = st.date_input("İşlem Tarihi", datetime.date.today())
     
-    # İşlem Türü Seçimi
     turler_resp = supabase.table("islem_turleri").select("tur_adi").execute().data
     turler = [t["tur_adi"] for t in turler_resp] if turler_resp else ["Dolgu", "Kanal Tedavisi", "Muayene", "Çekim"]
     secilen_tur = st.selectbox("Yapılan İşlem", turler)
     
-    # Hekim Notu
     hekim_notu = st.text_area("Hekim Notları")
     
     st.write("---")
-    st.write("📸 **Fotoğraf Ekle (Çoklu Yükleme ve Çekim):**")
+    st.write("📸 **Fotoğraf Ekle:**")
     
     col_cam, col_file = st.columns(2)
     with col_cam:
@@ -142,7 +223,6 @@ elif st.session_state.sayfa == "yeni_islem_ana":
                 if ff not in st.session_state.gecici_fotolar:
                     st.session_state.gecici_fotolar.append(ff)
 
-    # Yüklenen Geçici Fotoğrafları Listele ve Silme Seçeneği Sun
     if st.session_state.gecici_fotolar:
         st.write("**Eklenecek Fotoğraflar:**")
         cols = st.columns(3)
@@ -156,30 +236,29 @@ elif st.session_state.sayfa == "yeni_islem_ana":
     if st.button("💾 İşlemi Kaydet"):
         final_hasta_id = secilen_hasta_id
         
-        # Yeni Hasta ise önce hastayı kaydet
         if secilen_hasta_id == "YENI":
             if yeni_ad and yeni_tel:
                 h_res = supabase.table("hastalar").insert({
                     "ad_soyad": yeni_ad,
                     "telefon": yeni_tel,
+                    "kullanici_id": user_id,
                     "kayit_tarihi": datetime.datetime.now().isoformat()
                 }).execute()
                 final_hasta_id = h_res.data[0]["id"]
             else:
-                st.error("Lütfen Yeni Hasta için Ad Soyad ve Telefon alanlarını doldurun.")
+                st.error("Lütfen Ad Soyad ve Telefon alanlarını doldurun.")
                 st.stop()
                 
-        # Fotoğrafları Supabase Storage'a Yükle
         foto_url_listesi = []
         for foto in st.session_state.gecici_fotolar:
-            dosya_adi = f"proc_{int(datetime.datetime.now().timestamp())}_{foto.name if hasattr(foto, 'name') else 'cam.png'}"
+            dosya_adi = f"proc_{int(datetime.datetime.now().timestamp())}_{user_id[:5]}.png"
             supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.read())
             url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
             foto_url_listesi.append(url)
 
-        # İşlemi Kaydet
         islem_data = {
             "hasta_id": final_hasta_id,
+            "kullanici_id": user_id,
             "islem_tarihi": islem_tarihi.isoformat(),
             "islem_turu": secilen_tur,
             "hekim_notu": hekim_notu,
@@ -187,7 +266,7 @@ elif st.session_state.sayfa == "yeni_islem_ana":
         }
         supabase.table("islemler").insert(islem_data).execute()
         
-        st.toast("✅ İşlem başarıyla kaydedildi!")
+        st.toast("✅ İşlem kaydedildi!")
         st.session_state.gecici_fotolar = []
         st.rerun()
 
@@ -222,6 +301,7 @@ elif st.session_state.sayfa == "yeni_hasta":
                     "dogum_tarihi": dogum_tarihi.isoformat(),
                     "telefon": telefon,
                     "foto_url": foto_url,
+                    "kullanici_id": user_id,
                     "kayit_tarihi": datetime.datetime.now().isoformat()
                 }
                 supabase.table("hastalar").insert(hasta_veri).execute()
@@ -233,31 +313,25 @@ elif st.session_state.sayfa == "yeni_hasta":
 elif st.session_state.sayfa == "hasta_listesi":
     st.subheader("📋 Hasta Listesi")
     
-    # 1. ARAMA VE BİREBİR İSTEDİĞİN TARİH DÜZENİ
-    st.write("### 🔍 Arama ve Filtreleme")
     f_isim = st.text_input("Hasta İsmi ile Arama")
     
     st.write("**Tarih Seçimi / Aralığı:**")
-    # 1. Tarih Grubu (Yan Yana: Gün, Ay, Yıl)
     col_g1, col_a1, col_y1 = st.columns(3)
     f_g1 = col_g1.selectbox("Gün (1)", [0] + list(range(1, 32)))
     f_a1 = col_a1.selectbox("Ay (1)", [0] + list(range(1, 13)))
     f_y1 = col_y1.number_input("Yıl (1)", min_value=0, max_value=2099, value=0)
 
-    # 2. Tarih Grubu (Aynı Sırayla Altına: Gün, Ay, Yıl)
     col_g2, col_a2, col_y2 = st.columns(3)
     f_g2 = col_g2.selectbox("Gün (2)", [0] + list(range(1, 32)))
     f_a2 = col_a2.selectbox("Ay (2)", [0] + list(range(1, 13)))
     f_y2 = col_y2.number_input("Yıl (2)", min_value=0, max_value=2099, value=0)
 
-    # İşlem Filtresi
     turler_resp = supabase.table("islem_turleri").select("tur_adi").execute().data
     tur_listesi = ["Tümü"] + [t["tur_adi"] for t in turler_resp] if turler_resp else ["Tümü"]
     f_islem_turu = st.selectbox("İşlem Türü Filtresi", tur_listesi)
 
     st.write("---")
 
-    # LISTENI SAĞ ÜSTÜNDE SIRALAMA SEÇENEĞİ VE LİSTE BUTONU
     c_btn, c_sort = st.columns([2, 2])
     with c_btn:
         if st.button("📋 Hastaları Listele / Kapat"):
@@ -266,24 +340,21 @@ elif st.session_state.sayfa == "hasta_listesi":
     with c_sort:
         sirulama_secimi = st.selectbox("Sıralama Seçeneği", ["Kayıt Tarihi (Yeni > Eski)", "Alfabetik (A-Z)"])
 
-    # LİSTELEME
     if st.session_state.liste_acik:
-        hastalar = supabase.table("hastalar").select("*").execute().data
+        # Sadece bu kullanıcının hastalarını çek
+        hastalar = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).execute().data
         
         if hastalar:
             df_hastalar = pd.DataFrame(hastalar)
             
-            # İsim Filtresi
             if f_isim:
                 df_hastalar = df_hastalar[df_hastalar["ad_soyad"].str.contains(f_isim, case=False, na=False)]
 
-            # İşlem Türüne Göre Filtrele
             if f_islem_turu != "Tümü":
-                islem_hastalar = supabase.table("islemler").select("hasta_id").eq("islem_turu", f_islem_turu).execute().data
+                islem_hastalar = supabase.table("islemler").select("hasta_id").eq("islem_turu", f_islem_turu).eq("kullanici_id", user_id).execute().data
                 uygun_ids = [i["hasta_id"] for i in islem_hastalar]
                 df_hastalar = df_hastalar[df_hastalar["id"].isin(uygun_ids)]
 
-            # Sıralama
             if sirulama_secimi == "Alfabetik (A-Z)":
                 df_hastalar = df_hastalar.sort_values(by="ad_soyad")
             else:
@@ -300,12 +371,12 @@ elif st.session_state.sayfa == "hasta_listesi":
                         sayfa_degistir("hasta_detay")
                         st.rerun()
         else:
-            st.info("Kayıtlı hasta bulunamadı.")
+            st.info("Kayıtlı hastanız bulunamadı.")
 
 # --- 4.1 HASTA DETAY SAYFASI ---
 elif st.session_state.sayfa == "hasta_detay":
     h_id = st.session_state.secili_hasta_id
-    hasta_resp = supabase.table("hastalar").select("*").eq("id", h_id).execute().data
+    hasta_resp = supabase.table("hastalar").select("*").eq("id", h_id).eq("kullanici_id", user_id).execute().data
     
     if hasta_resp:
         hasta = hasta_resp[0]
@@ -336,7 +407,7 @@ elif st.session_state.sayfa == "hasta_detay":
                 st.rerun()
 
         st.write("### Yapılan İşlemler Kronolojisi")
-        islemler = supabase.table("islemler").select("*").eq("hasta_id", h_id).order("islem_tarihi", desc=True).execute().data
+        islemler = supabase.table("islemler").select("*").eq("hasta_id", h_id).eq("kullanici_id", user_id).order("islem_tarihi", desc=True).execute().data
         
         if islemler:
             for isl in islemler:
@@ -379,13 +450,12 @@ elif st.session_state.sayfa == "ayarlar":
 
     st.write("---")
     st.write("### Excel Veri Yedekleme")
-    if st.button("📊 Tüm Hasta Verilerini Excel Olarak İndir"):
-        h_data = supabase.table("hastalar").select("*").execute().data
+    if st.button("📊 Sadece Benim Hastalarımı Excel Olarak İndir"):
+        h_data = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).execute().data
         if h_data:
             df = pd.DataFrame(h_data)
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Hastalar')
             excel_data = output.getvalue()
-            st.download_button(label="📥 İndirmeyi Başlat", data=excel_data, file_name="Hasta_Kayitlari.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                
+            st.download_button(label="📥 İndirmeyi Başlat", data=excel_data, file_name="Hasta_Kayitlarim.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
