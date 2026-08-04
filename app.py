@@ -3,8 +3,16 @@ from supabase import create_client, Client
 import datetime
 
 # --- SUPABASE BAĞLANTISI ---
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+# Proje ID'niz (zmamzsmfpspenhslskmq) URL içine entegre edilmiştir.
+SUPABASE_URL = "https://zmamzsmfpspenhslskmq.supabase.co"
+
+# secrets.toml kullanıyorsanız oradan okur, yoksa aşağıdaki stringe (veya Streamlit Secrets'a) anahtarınızı yazabilirsiniz.
+try:
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except:
+    # Lokal testler için buraya Supabase panelinden aldığın 'anon public' key'i yapıştırabilirsin:
+    SUPABASE_KEY = "BURAYA_SUPABASE_ANON_KEY_DEGERINI_YAZIN"
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- SAYFA AYARLARI (Mobil Uyumlu) ---
@@ -51,7 +59,6 @@ st.write("---")
 
 # --- MOBİL UYUMLU BUTON MENÜSÜ ---
 for etiket, kod in MENULER.items():
-    # Aktif sayfayı vurgulamak için buton türünü değiştiriyoruz
     btn_type = "primary" if st.session_state.sayfa == kod else "secondary"
     if st.button(etiket, key=f"btn_{kod}", type=btn_type):
         sayfa_degistir(kod)
@@ -136,10 +143,7 @@ elif st.session_state.sayfa == "yeni_islem":
             st.write("---")
             st.write("📸 **Fotoğraf Ekle (Kamera veya Dosya):**")
             
-            # Seçenek 1: Doğrudan Kameradan Çek
             kamera_foto = st.camera_input("Kameradan Fotoğraf Çek")
-            
-            # Seçenek 2: Galeriden / Dosyalardan Yükle
             dosya_foto = st.file_uploader("veya Galeriden Fotoğraf Seç", type=["jpg", "jpeg", "png"])
             
             submit_islem = st.form_submit_button("İşlemi Kaydet")
@@ -149,14 +153,12 @@ elif st.session_state.sayfa == "yeni_islem":
                     st.error("Lütfen yapılan işlemi belirtin.")
                 else:
                     fotograf_url = None
-                    # Kameradan mı yoksa galeriden mi dosya geldiğini kontrol ediyoruz
                     yuklenen_dosya = kamera_foto if kamera_foto is not None else dosya_foto
                     
                     if yuklenen_dosya is not None:
                         dosya_adi = f"{hasta_id}_{int(datetime.datetime.now().timestamp())}.png"
                         res_bytes = yuklenen_dosya.read()
                         
-                        # Supabase Storage'a yükleme
                         supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, res_bytes)
                         fotograf_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
                     
@@ -177,5 +179,5 @@ elif st.session_state.sayfa == "yeni_islem":
 elif st.session_state.sayfa == "ayarlar":
     st.header("⚙️ Ayarlar")
     st.write("Uygulama ayarları ve menü yapılandırmaları.")
-    st.info("Sistem aktif olarak Supabase bulut veritabanı ile senkronize çalışmaktadır.")
-        
+    st.info(f"Bağlı Supabase Proje ID: `{SUPABASE_URL.split('//')[1].split('.')[0]}`")
+    
