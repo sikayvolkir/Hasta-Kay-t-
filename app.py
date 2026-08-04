@@ -332,7 +332,6 @@ elif st.session_state.sayfa == "hasta_detay":
             st.session_state.sayfa = "hasta_listesi"
             st.rerun()
     else:
-        # HASTA BİLGİSİ / DÜZENLEME ALANI
         if st.session_state.hasta_duzenleme_modu:
             st.subheader("✏️ Hasta Bilgilerini Düzenle")
             with st.form("hasta_duzenle_formu"):
@@ -432,4 +431,4 @@ elif st.session_state.sayfa == "hasta_detay":
                                 else:
                                     yeni_toplam_not = existing_not
 
-                                mevcut_urls = [u.strip() for u in 
+                                mevcut_urls = [u.strip() for u in (islem.get("fotograf_url") or "").split(",
