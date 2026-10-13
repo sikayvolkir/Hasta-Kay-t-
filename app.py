@@ -258,7 +258,7 @@ elif st.session_state.sayfa == "yeni_hasta":
                 st.warning("Lütfen Hasta Adı Soyadı ve Telefon alanlarını doldurun.")
 
 # ==============================================================================
-# --- YENİ MUAYENE EKRANI VE SABİT 32 DİŞ ŞEMASI ---
+# --- YENİ MUAYENE EKRANI VE ANATOMİK DİŞ ŞEMASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_muayene":
     st.title("🦷 Yeni Muayene ve Tedavi Planı")
@@ -300,25 +300,29 @@ elif st.session_state.sayfa == "yeni_muayene":
     muayene_tarihi = st.date_input("Muayene Tarihi", datetime.date.today())
     st.markdown("---")
 
-    st.subheader("🦷 Diş Şeması (Üst ve Alt Çene - 32 Diş)")
-    st.info("Üst çene dişleri üst sırada, alt çene dişleri alt sırada yer almaktadır. İşlem yapmak istediğiniz dişe tıklayın.")
+    # --- ANATOMİK DİŞ ŞEMASI (GERÇEKÇİ DİŞ GÖRSELLERİ İLE) ---
+    st.markdown("### 🦷 Diş Şeması (Kalıcı Dişler)")
+    st.info("Üst ve alt çene kalıcı diş şeması[cite: 3, 5]. İşlem yapmak istediğiniz dişe tıklayın.")
 
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-    st.markdown("#### **ÜST ÇENE**")
+    st.markdown("#### **HASTANIN SAĞI ------------------------ ÜST ÇENE ------------------------ HASTANIN SOLU**[cite: 3, 5]")
     cols_ust = st.columns(16)
     for idx, d_no in enumerate(ust_disler):
         is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
-        btn_label = f"{d_no}\n" + ("🟦" if is_secili else "⬜")
+        kutu_durum = "🟦" if is_secili else "⬜"
+        # Gerçekçi diş görsel simgesi ve altında kutucuk
+        btn_label = f"🦷\n{d_no}\n{kutu_durum}"
         if cols_ust[idx].button(btn_label, key=f"ust_d_{d_no}", use_container_width=True):
             st.session_state.aktif_modal_dis = d_no
 
-    st.markdown("#### **ALT ÇENE**")
+    st.markdown("#### **HASTANIN SAĞI ------------------------ ALT ÇENE ------------------------ HASTANIN SOLU**[cite: 3, 5]")
     cols_alt = st.columns(16)
     for idx, d_no in enumerate(alt_disler):
         is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
-        btn_label = f"{d_no}\n" + ("🟦" if is_secili else "⬜")
+        kutu_durum = "🟦" if is_secili else "⬜"
+        btn_label = f"🦷\n{d_no}\n{kutu_durum}"
         if cols_alt[idx].button(btn_label, key=f"alt_d_{d_no}", use_container_width=True):
             st.session_state.aktif_modal_dis = d_no
 
@@ -534,19 +538,19 @@ elif st.session_state.sayfa == "hasta_detay":
                     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
                     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-                    st.markdown("**ÜST ÇENE**")
+                    st.markdown("**ÜST ÇENE**[cite: 3, 5]")
                     cols_ust = st.columns(16)
                     for idx, d_no in enumerate(ust_disler):
                         is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
                         kutu = "🟦" if is_secili else "⬜"
-                        cols_ust[idx].markdown(f"<div style='text-align:center;'>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+                        cols_ust[idx].markdown(f"<div style='text-align:center;'>🦷<br>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
 
-                    st.markdown("**ALT ÇENE**")
+                    st.markdown("**ALT ÇENE**[cite: 3, 5]")
                     cols_alt = st.columns(16)
                     for idx, d_no in enumerate(alt_disler):
                         is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
                         kutu = "🟦" if is_secili else "⬜"
-                        cols_alt[idx].markdown(f"<div style='text-align:center;'>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+                        cols_alt[idx].markdown(f"<div style='text-align:center;'>🦷<br>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
 
                     if dis_plani_data:
                         st.write("---")
@@ -630,13 +634,12 @@ elif st.session_state.sayfa == "ayarlar":
                 c_s1.write(f"#{idx+1}")
                 c_s2.write(m_soru['soru_metni'])
                 
-                # Yukarı taşıma (Sıralama değiştirme) mantığı
                 if idx > 0 and c_s3.button("⬆️", key=f"yukari_{m_soru['id']}"):
                     ustteki_soru = mevcut_sorular[idx - 1]
-                    # Üstteki soru ile alttaki sorunun metinlerini yer değiştir
                     try:
-                        supabase.table("form_sorulari").update({"soru_metni": m_soru['soru_metni']}).eq("id", ustteki_soru['id']).execute()
+                        supabase.table("form_sorulari").update({"soru_metni": "___TEMP___"}).eq("id", ustteki_soru['id']).execute()
                         supabase.table("form_sorulari").update({"soru_metni": ustteki_soru['soru_metni']}).eq("id", m_soru['id']).execute()
+                        supabase.table("form_sorulari").update({"soru_metni": m_soru['soru_metni']}).eq("id", ustteki_soru['id']).execute()
                         st.toast("Soru sırası değiştirildi.")
                         st.rerun()
                     except Exception as ex:
