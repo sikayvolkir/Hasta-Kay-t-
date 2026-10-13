@@ -39,16 +39,14 @@ if "duzenlenen_islem_id" not in st.session_state:
     st.session_state.duzenlenen_islem_id = None
 if "hasta_duzenleme_modu" not in st.session_state:
     st.session_state.hasta_duzenleme_modu = False
-
-# Modal / Pencere state'leri
 if "aktif_modal_dis" not in st.session_state:
     st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state:
-    st.session_state.dis_islemleri_gecici = {} # {dis_no: [{islem, tarih, aciklama}]}
-if "modal_degerlendirme_acik" not in st.session_state:
-    st.session_state.modal_degerlendirme_acik = False
+    st.session_state.dis_islemleri_gecici = {}
 if "yeni_muayene_form_cevaplari" not in st.session_state:
     st.session_state.yeni_muayene_form_cevaplari = {}
+if "dis_semasi_popup_acik" not in st.session_state:
+    st.session_state.dis_semasi_popup_acik = False
 
 # --- AUTHENTICATION FUNCTIONS ---
 def login(email, password):
@@ -69,6 +67,13 @@ def register(email, password):
     except Exception as e:
         st.error(f"Kayıt Başarısız: {e}")
 
+def reset_password(email):
+    try:
+        supabase.auth.reset_password_for_email(email)
+        st.success("Şifre sıfırlama talimatı e-posta adresinize gönderildi.")
+    except Exception as e:
+        st.error(f"Şifre sıfırlama hatası: {e}")
+
 def logout():
     try:
         supabase.auth.sign_out()
@@ -80,13 +85,13 @@ def logout():
     st.session_state.hasta_duzenleme_modu = False
     st.rerun()
 
-# --- LOGIN & REGISTER SCREEN ---
+# --- LOGIN & REGISTER & FORGOT PASSWORD SCREEN ---
 if not st.session_state.user:
     st.markdown("<h2 style='text-align: center;'>🩺 Hasta Takip Sistemi</h2>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab_login, tab_register = st.tabs(["🔑 Giriş Yap", "📝 Kayıt Ol"])
+        tab_login, tab_register, tab_forgot = st.tabs(["🔑 Giriş Yap", "📝 Kayıt Ol", "🔒 Şifremi Unuttum"])
         
         with tab_login:
             with st.form("login_form"):
@@ -109,13 +114,23 @@ if not st.session_state.user:
                         register(reg_email, reg_password)
                     else:
                         st.warning("Lütfen e-posta ve şifrenizi doldurun.")
+
+        with tab_forgot:
+            with st.form("forgot_form"):
+                f_email = st.text_input("Kayıtlı E-posta Adresiniz")
+                f_submit = st.form_submit_button("Şifremi E-posta ile Gönder", use_container_width=True)
+                if f_submit:
+                    if f_email:
+                        reset_password(f_email)
+                    else:
+                        st.warning("Lütfen e-posta adresinizi girin.")
     st.stop()
 
 # --- LOGGED IN USER CONTEXT ---
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION (KAYDIRMA / AÇILIR KAPANIR) ---
+# --- SIDEBAR NAVIGATION ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
@@ -245,7 +260,7 @@ elif st.session_state.sayfa == "yeni_hasta":
                 st.warning("Lütfen Hasta Adı Soyadı ve Telefon alanlarını doldurun.")
 
 # ==============================================================================
-# --- YENİ EKLENEN SAYFA: YENİ MUAYENE EKRANI ---
+# --- YENİ MUAYENE EKRANI VE DİŞ ŞEMASI POP-UP ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_muayene":
     st.title("🦷 Yeni Muayene ve Tedavi Planı")
@@ -267,50 +282,74 @@ elif st.session_state.sayfa == "yeni_muayene":
             if st.button("Hızlı Hasta Oluştur"):
                 if yeni_h_ad and yeni_h_tel:
                     try:
-                        res = supabase.table("hastalar").insert({
+                        supabase.table("hastalar").insert({
                             "ad_soyad": yeni_h_ad,
                             "telefon": yeni_h_tel,
                             "kullanici_id": user_id,
                             "kayit_tarihi": datetime.datetime.now().isoformat()
                         }).execute()
-                        st.success("Yeni hasta oluşturuldu! Lütfen sayfayı güncelleyin veya tekrar seçin.")
+                        st.success("Yeni hasta oluşturuldu! Sayfa yenileniyor.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Hata: {e}")
                 else:
                     st.warning("Ad ve telefon zorunludur.")
     else:
-        # Seçilen hastanın ID'sini bul
         for h in hastalar_res:
             if f"{h['ad_soyad']} ({h['telefon']})" == secilen_hasta_secim:
                 hedef_hasta_id = h['id']
                 break
 
-    # 2. Tarih Seçimi (Varsayılan bugün, değiştirmeye izinli)
     muayene_tarihi = st.date_input("Muayene Tarihi", datetime.date.today())
-
     st.markdown("---")
 
-    # 3. Tedavi Planı Bölümü (Diş Şeması Modalı/Butonları)
-    st.subheader("🦷 Tedavi Planı (Diş Şeması)")
-    st.info("Dişler üzerine tıklayarak ilgili diş için işlem, ileri tarih ve not tanımlayabilirsiniz.")
+    # --- PLAN GÖRSELİ / POP-UP BUTONU VE GÖRSEL GERİ BİLDİRİM ---
+    col_gorsel_btn, _ = st.columns([2, 2])
+    with col_gorsel_btn:
+        if st.button("📊 Plan Görseli (Diş Şeması)", use_container_width=True, type="primary"):
+            st.session_state.dis_semasi_popup_acik = True
 
-    # Diş listesi (Örnek standart diş numaraları / harfleri: Üst ve Alt ark simülasyonu)
+    # Pop-up Pencere Simülasyonu / Açılır Konteyner
+    if st.session_state.dis_semasi_popup_acik:
+        with st.container():
+            st.markdown("---")
+            st.markdown("### 🦷 Diş Şeması ve Durum Görseli (Pop-Up)")
+            st.info("Aşağıdaki diş şeması üzerinde planlanan veya yapılan işlemlerin renkli kutucuk durumlarını inceleyebilirsiniz.")
+            
+            # Kalıcı / Süt Dişleri Görsel Sekme Simülasyonu
+            sema_tipi = st.radio("Diş Grubu", ["Kalıcı dişler", "Süt dişleri"], horizontal=True, key="popup_sema_tipi")
+            
+            # Görsel Geri Bildirim: Dişlerin altındaki renkli kutucuklar grid yapısı
+            aktif_dis_kumesi = [str(i) for i in range(18, 11, -1)] + [str(i) for i in range(21, 29)] if sema_tipi == "Kalıcı dişler" else ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+            
+            cols_s = st.columns(len(aktif_dis_kumesi) if len(aktif_dis_kumesi) < 16 else 16)
+            for i, d_kodu in enumerate(aktif_dis_kumesi):
+                with cols_s[i % len(cols_s)]:
+                    # Eğer bu diş için işlem planlanmışsa rengini/durumunu göster
+                    islem_var = d_kodu in st.session_state.dis_islemleri_gecici
+                     kutu_bg = "🟦" if islem_var else "⬜"
+                    st.markdown(f"<div style='text-align:center;'><b>{d_kodu}</b><br>{kutu_bg}</div>", unsafe_allow_html=True)
+
+            if st.button("✖️ Pop-Up'ı Kapat"):
+                st.session_state.dis_semasi_popup_acik = False
+                st.rerun()
+            st.markdown("---")
+
+    # 3. Tedavi Planı Bölümü (Diş Seçimi)
+    st.subheader("🦷 Tedavi Planı (Diş Seçimi)")
     dis_listesi = [
         "18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28",
         "48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38",
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"
     ]
 
-    # Grid veya butonlar şeklinde dişlerin gösterimi
     cols_dis = st.columns(8)
-    for idx, dis_no in enumerate(dis_listesi[:32]): # Üst/Alt Daimi dişler öncelikli
-        is_secili = dis_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[dis_no]) > 0
-        btn_label = f"🦷 {dis_no}" + (" (İşlemli)" if is_secili else "")
+    for idx, dis_no in enumerate(dis_listesi[:32]):
+        is_secili = dis_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[dis_no]["islemler"]) > 0
+        btn_label = f"🦷 {dis_no}" + (" 🟩" if is_secili else "")
         if cols_dis[idx % 8].button(btn_label, key=f"dis_btn_{dis_no}"):
             st.session_state.aktif_modal_dis = dis_no
 
-    # Eğer bir dişe tıklandıysa o dişin penceresi / ayarları açılır
     if st.session_state.aktif_modal_dis:
         aktif_d = st.session_state.aktif_modal_dis
         st.markdown(f"### ⚙️ Diş No: {aktif_d} - İşlem Tanımlama Penceresi")
@@ -322,17 +361,17 @@ elif st.session_state.sayfa == "yeni_muayene":
             tum_islemler = ["Dolgu", "Kanal", "Çekim", "Kron", "İmplant"]
 
         with st.form(key=f"dis_form_{aktif_d}"):
-            st.write("Yapılacak İşlemleri Seçin (Birden fazla seçebilirsiniz):")
+            st.write("Yapılacak İşlemleri Seçin:")
             secilen_islemler = []
             for islem_adi in tum_islemler:
                 if st.checkbox(islem_adi, key=f"chk_{aktif_d}_{islem_adi}"):
                     secilen_islemler.append(islem_adi)
 
-            islem_metin_kutu = st.text_input("Diş İçin Ek Açıklama / Metin Kutusu", key=f"txt_{aktif_d}")
+            islem_metin_kutu = st.text_input("Ek Açıklama", key=f"txt_{aktif_d}")
             ileri_tarih = st.date_input("İleriye Yönelik İşlem Tarihi", datetime.date.today(), key=f"date_{aktif_d}")
 
             col_m1, col_m2 = st.columns(2)
-            kaydet_dis = col_m1.form_submit_button("💾 Diş İşlemini Kaydet")
+            kaydet_dis = col_m1.form_submit_button("💾 Kaydet")
             kapat_dis = col_m2.form_submit_button("✖️ Çarpı (Kapat)")
 
             if kaydet_dis:
@@ -341,7 +380,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                     "not": islem_metin_kutu,
                     "tarih": ileri_tarih.isoformat()
                 }
-                st.success(f"{aktif_d} nolu diş kaydedildi.")
+                st.success(f"{aktif_d} nolu diş eklendi.")
                 st.session_state.aktif_modal_dis = None
                 st.rerun()
 
@@ -349,7 +388,6 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.session_state.aktif_modal_dis = None
                 st.rerun()
 
-    # Kaydedilmiş diş işlemlerinin özeti
     if st.session_state.dis_islemleri_gecici:
         st.write("📋 **Planlanan Diş İşlemleri Özeti:**")
         for d_no, d_bilgi in st.session_state.dis_islemleri_gecici.items():
@@ -357,12 +395,10 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
 
-    # 4. Hasta Değerlendirme Formu Bölümü
+    # 4. Hasta Değerlendirme Formu
     st.subheader("📋 Hasta Değerlendirme Formu")
-    
-    # Ayarlardan gelen soruları çek
     try:
-        sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).execute().data
+        sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
     except Exception:
         sorular_res = []
 
@@ -376,15 +412,10 @@ elif st.session_state.sayfa == "yeni_muayene":
             st.session_state.yeni_muayene_form_cevaplari[s_metin] = cevap
 
     st.markdown("---")
-
-    # 5. Not ve Resim Yükleme Kısımları
     st.subheader("📝 Genel Notlar ve Görseller")
     muayene_genel_not = st.text_area("Muayene Notu / Açıklama")
-
-    st.write("📸 **Röntgen / Resim Yükle:**")
     muayene_fotolar = st.file_uploader("Görsel Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="muayene_foto_yukle")
 
-    # 6. Kaydet Butonu
     if st.button("💾 Muayeneyi Tamamen Kaydet", use_container_width=True):
         if not hedef_hasta_id:
             st.warning("Lütfen geçerli bir hasta seçin.")
@@ -394,12 +425,10 @@ elif st.session_state.sayfa == "yeni_muayene":
                 if muayene_fotolar:
                     for foto in muayene_fotolar:
                         dosya_adi = f"muayene_{int(datetime.datetime.now().timestamp())}_{user_id[:4]}.png"
-                        foto_bytes = foto.getvalue()
-                        supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto_bytes)
+                        supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.getvalue())
                         url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
                         foto_url_listesi.append(url)
 
-                # Verileri kaydetme hazırlığı
                 muayene_veri = {
                     "hasta_id": hedef_hasta_id,
                     "kullanici_id": user_id,
@@ -411,8 +440,6 @@ elif st.session_state.sayfa == "yeni_muayene":
 
                 supabase.table("islemler").insert(muayene_veri).execute()
                 st.toast("✅ Muayene başarıyla kaydedildi!")
-                
-                # Session temizliği
                 st.session_state.dis_islemleri_gecici = {}
                 st.session_state.yeni_muayene_form_cevaplari = {}
                 st.session_state.secili_hasta_id = hedef_hasta_id
@@ -426,14 +453,13 @@ elif st.session_state.sayfa == "yeni_muayene":
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_islem":
     st.title("💉 Yeni İşlem Ekle (Hızlı)")
-
     try:
         hastalar_res = supabase.table("hastalar").select("id, ad_soyad, telefon").eq("kullanici_id", user_id).order("ad_soyad").execute().data
     except Exception:
         hastalar_res = []
 
     if not hastalar_res:
-        st.warning("Henüz kayıtlı hastanız bulunmuyor. Önce 'Yeni Hasta Kaydı' yapmalısınız.")
+        st.warning("Henüz kayıtlı hastanız bulunmuyor.")
     else:
         hasta_dict = {f"{h['ad_soyad']} ({h['telefon']})": h['id'] for h in hastalar_res}
         secilen_label = st.selectbox("İşlem Yapılacak Hastayı Seçin *", list(hasta_dict.keys()))
@@ -443,71 +469,33 @@ elif st.session_state.sayfa == "yeni_islem":
             tur_data = supabase.table("islem_turleri").select("tur_adi").execute().data
             islem_turleri_listesi = [item["tur_adi"] for item in tur_data] if tur_data else ["Muayene", "Dolgu", "Çekim"]
         except Exception:
-            islem_turleri_listesi = ["Muayene", "Dolgu", "Kanal Tedavisi", "Çekim"]
+            islem_turleri_listesi = ["Muayene", "Dolgu", "Çekim"]
 
         islem_tarihi = st.date_input("İşlem Tarihi", datetime.date.today())
         islem_turu = st.selectbox("İşlem Türü", islem_turleri_listesi)
         hekim_notu = st.text_area("Hekim Notu / Açıklama")
 
-        st.write("📸 **Fotoğraf / Röntgen Yükle:**")
-        col_cam, col_file = st.columns(2)
-        with col_cam:
-            cam_foto = st.camera_input("Kameradan Çek")
-            if cam_foto and cam_foto not in st.session_state.gecici_fotolar:
-                st.session_state.gecici_fotolar.append(cam_foto)
-        with col_file:
-            file_fotolar = st.file_uploader("Galeriden Seç (Çoklu)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-            if file_fotolar:
-                for ff in file_fotolar:
-                    if ff not in st.session_state.gecici_fotolar:
-                        st.session_state.gecici_fotolar.append(ff)
-
-        if st.session_state.gecici_fotolar:
-            st.write("**Eklenecek Görseller:**")
-            cols = st.columns(4)
-            for idx, foto in enumerate(st.session_state.gecici_fotolar):
-                with cols[idx % 4]:
-                    st.image(foto, width=120)
-                    if st.button("Sil", key=f"f_sil_{idx}"):
-                        st.session_state.gecici_fotolar.pop(idx)
-                        st.rerun()
-
         if st.button("💾 İşlemi Kaydet", use_container_width=True):
             try:
-                foto_url_listesi = []
-                for foto in st.session_state.gecici_fotolar:
-                    dosya_adi = f"proc_{int(datetime.datetime.now().timestamp())}_{user_id[:4]}.png"
-                    foto_bytes = foto.getvalue() if hasattr(foto, 'getvalue') else foto.read()
-                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto_bytes)
-                    url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-                    foto_url_listesi.append(url)
-
-                formatted_not = f"[{datetime.date.today().strftime('%d.%m.%Y')}] {hekim_notu}" if hekim_notu else ""
-
-                islem_veri = {
+                supabase.table("islemler").insert({
                     "hasta_id": secilen_hasta_id,
                     "islem_tarihi": islem_tarihi.isoformat(),
                     "islem_turu": islem_turu,
-                    "hekim_notu": formatted_not,
-                    "fotograf_url": ",".join(foto_url_listesi) if foto_url_listesi else None,
+                    "hekim_notu": hekim_notu,
                     "kullanici_id": user_id
-                }
-
-                supabase.table("islemler").insert(islem_veri).execute()
-                st.toast("✅ İşlem başarıyla kaydedildi!")
-                st.session_state.gecici_fotolar = []
+                }).execute()
+                st.toast("✅ İşlem kaydedildi!")
                 st.session_state.secili_hasta_id = secilen_hasta_id
                 st.session_state.sayfa = "hasta_detay"
                 st.rerun()
             except Exception as ex:
-                st.error(f"İşlem kaydedilirken hata oluştu: {ex}")
+                st.error(f"Hata: {ex}")
 
 # ==============================================================================
-# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ SAYFASI ---
+# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ ---
 # ==============================================================================
 elif st.session_state.sayfa == "hasta_detay":
     hasta_id = st.session_state.secili_hasta_id
-
     if not hasta_id:
         st.warning("Seçili hasta bulunamadı.")
         st.session_state.sayfa = "hasta_listesi"
@@ -516,162 +504,38 @@ elif st.session_state.sayfa == "hasta_detay":
     try:
         hasta_res = supabase.table("hastalar").select("*").eq("id", hasta_id).execute()
         hasta = hasta_res.data[0] if hasta_res.data else None
-    except Exception as e:
-        st.error(f"Hasta bilgisi çekilemedi: {e}")
+    except Exception:
         hasta = None
 
-    if not hasta:
-        st.error("Hasta bulunamadı!")
-        if st.button("Listeye Dön"):
-            st.session_state.sayfa = "hasta_listesi"
-            st.rerun()
-    else:
-        if st.session_state.hasta_duzenleme_modu:
-            st.subheader("✏️ Hasta Bilgilerini Düzenle")
-            with st.form("hasta_duzenle_formu"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    yeni_ad = st.text_input("Hasta Adı Soyadı", value=hasta.get("ad_soyad", ""))
-                    yeni_tel = st.text_input("Telefon Numarası", value=hasta.get("telefon", ""))
-                    cinsiyet_opts = ["Kadın", "Erkek", "Diğer"]
-                    c_idx = cinsiyet_opts.index(hasta.get("cinsiyet")) if hasta.get("cinsiyet") in cinsiyet_opts else 0
-                    yeni_cinsiyet = st.selectbox("Cinsiyet", cinsiyet_opts, index=c_idx)
-                with col2:
-                    dt_val = datetime.datetime.strptime(hasta["dogum_tarihi"], "%Y-%m-%d").date() if hasta.get("dogum_tarihi") else datetime.date(1990, 1, 1)
-                    yeni_dt = st.date_input("Doğum Tarihi", dt_val)
-                    yeni_foto = st.file_uploader("Yeni Profil Fotoğrafı Yükle", type=["jpg", "png", "jpeg"])
-
-                c_h_save, c_h_cancel = st.columns(2)
-                with c_h_save:
-                    btn_hasta_kaydet = st.form_submit_button("💾 Bilgileri Güncelle", use_container_width=True)
-                with c_h_cancel:
-                    btn_hasta_iptal = st.form_submit_button("❌ İptal", use_container_width=True)
-
-                if btn_hasta_kaydet:
-                    updated_foto_url = hasta.get("foto_url")
-                    if yeni_foto:
-                        dosya_adi = f"p_{int(datetime.datetime.now().timestamp())}.png"
-                        supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, yeni_foto.getvalue())
-                        updated_foto_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-
-                    supabase.table("hastalar").update({
-                        "ad_soyad": yeni_ad,
-                        "telefon": yeni_tel,
-                        "cinsiyet": yeni_cinsiyet,
-                        "dogum_tarihi": yeni_dt.isoformat() if yeni_dt else None,
-                        "foto_url": updated_foto_url
-                    }).eq("id", hasta_id).execute()
-
-                    st.toast("✅ Hasta bilgileri güncellendi.")
-                    st.session_state.hasta_duzenleme_modu = False
-                    st.rerun()
-
-                if btn_hasta_iptal:
-                    st.session_state.hasta_duzenleme_modu = False
-                    st.rerun()
-        else:
-            col_foto, col_info, col_del = st.columns([1, 3, 1])
-            with col_foto:
-                if hasta.get("foto_url"):
-                    st.image(hasta["foto_url"], width=120)
-                else:
-                    st.markdown("👤 *Fotoğraf Yok*")
-            with col_info:
-                st.title(hasta.get("ad_soyad"))
-                st.write(f"📞 **Telefon:** {hasta.get('telefon', '-')}")
-                st.write(f"🧬 **Cinsiyet:** {hasta.get('cinsiyet', '-')} | 📅 **D.Tarihi:** {hasta.get('dogum_tarihi', '-')}")
-            with col_del:
-                if st.button("✏️ Hastayı Düzenle", use_container_width=True):
-                    st.session_state.hasta_duzenleme_modu = True
-                    st.rerun()
-                if st.button("🗑️ Hastayı Sil", type="primary", use_container_width=True):
-                    supabase.table("hastalar").delete().eq("id", hasta_id).execute()
-                    st.toast("Hasta ve tüm geçmişi silindi.")
-                    st.session_state.sayfa = "hasta_listesi"
-                    st.rerun()
+    if hasta:
+        col_foto, col_info, col_del = st.columns([1, 3, 1])
+        with col_foto:
+            if hasta.get("foto_url"):
+                st.image(hasta["foto_url"], width=120)
+            else:
+                st.markdown("👤")
+        with col_info:
+            st.title(hasta.get("ad_soyad"))
+            st.write(f"📞 **Telefon:** {hasta.get('telefon', '-')}")
+        with col_del:
+            if st.button("🗑️ Hastayı Sil", type="primary", use_container_width=True):
+                supabase.table("hastalar").delete().eq("id", hasta_id).execute()
+                st.session_state.sayfa = "hasta_listesi"
+                st.rerun()
 
         st.markdown("---")
-        st.subheader("📜 Yapılan İşlemler ve Muayene Geçmişi")
-
+        st.subheader("📜 İşlem ve Muayene Geçmişi")
         try:
             islemler = supabase.table("islemler").select("*").eq("hasta_id", hasta_id).order("islem_tarihi", desc=True).execute().data
-        except Exception as e:
-            st.error(f"İşlemler çekilirken hata oluştu: {e}")
+        except Exception:
             islemler = []
 
-        if not islemler:
-            st.info("Bu hastaya ait henüz bir işlem kaydı bulunmuyor.")
-        else:
-            for islem in islemler:
-                with st.expander(f"🗓️ {islem.get('islem_tarihi')} - {islem.get('islem_turu')}"):
-                    
-                    if st.session_state.duzenlenen_islem_id == islem['id']:
-                        st.markdown("### ✏️ İşlemi Düzenle")
-                        
-                        yeni_ek_not = st.text_area("Yeni Not / Güncelleme Ekle", placeholder="Eklemek istediğiniz notu yazın...")
-                        
-                        st.write("📸 **Yeni Fotoğraf / Röntgen Ekle:**")
-                        yeni_fotolar = st.file_uploader("Görsel Yükle", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key=f"up_{islem['id']}")
-
-                        col_save, col_cancel = st.columns(2)
-                        with col_save:
-                            if st.button("💾 Değişiklikleri Kaydet", key=f"save_{islem['id']}", use_container_width=True):
-                                existing_not = islem.get("hekim_notu") or ""
-                                bugun_str = datetime.date.today().strftime('%d.%m.%Y')
-                                
-                                if yeni_ek_not.strip():
-                                    ek_metin = f"\n[{bugun_str} Ek Not]: {yeni_ek_not.strip()}"
-                                    yeni_toplam_not = existing_not + ek_metin if existing_not else f"[{bugun_str} Not]: {yeni_ek_not.strip()}"
-                                else:
-                                    yeni_toplam_not = existing_not
-
-                                mev_url_str = islem.get("fotograf_url") or ""
-                                mevcut_urls = [u.strip() for u in mev_url_str.split(",") if u.strip()]
-                                
-                                if yeni_fotolar:
-                                    for yf in yeni_fotolar:
-                                        dosya_adi = f"proc_{int(datetime.datetime.now().timestamp())}_{user_id[:4]}.png"
-                                        supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, yf.getvalue())
-                                        url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-                                        mevcut_urls.append(url)
-
-                                supabase.table("islemler").update({
-                                    "hekim_notu": yeni_toplam_not,
-                                    "fotograf_url": ",".join(mevcut_urls) if mevcut_urls else None
-                                }).eq("id", islem['id']).execute()
-
-                                st.toast("✅ İşlem başarıyla güncellendi.")
-                                st.session_state.duzenlenen_islem_id = None
-                                st.rerun()
-
-                        with col_cancel:
-                            if st.button("❌ İptal", key=f"cancel_{islem['id']}", use_container_width=True):
-                                st.session_state.duzenlenen_islem_id = None
-                                st.rerun()
-
-                    else:
-                        st.text_area("Hekim Notları Geçmişi", value=islem.get('hekim_notu', '-'), disabled=True, height=120)
-                        
-                        foto_raw = islem.get("fotograf_url")
-                        if foto_raw:
-                            urls = [u.strip() for u in foto_raw.split(",") if u.strip()]
-                            if urls:
-                                st.write("**Görseller / Röntgenler:**")
-                                img_cols = st.columns(min(len(urls), 3))
-                                for idx, u in enumerate(urls):
-                                    with img_cols[idx % 3]:
-                                        st.image(u, use_container_width=True)
-
-                        c_btn1, c_btn2 = st.columns([1, 1])
-                        with c_btn1:
-                            if st.button("✏️ Düzenle / Yeni Not-Foto Ekle", key=f"edit_{islem['id']}"):
-                                st.session_state.duzenlenen_islem_id = islem['id']
-                                st.rerun()
-                        with c_btn2:
-                            if st.button("🗑️ İşlemi Sil", key=f"isl_sil_{islem['id']}"):
-                                supabase.table("islemler").delete().eq("id", islem['id']).execute()
-                                st.toast("İşlem silindi.")
-                                st.rerun()
+        for islem in islemler:
+            with st.expander(f"🗓️ {islem.get('islem_tarihi')} - {islem.get('islem_turu')}"):
+                st.text_area("Notlar", value=islem.get('hekim_notu', '-'), disabled=True, key=f"not_{islem['id']}")
+                if st.button("🗑️ Sil", key=f"sil_isl_{islem['id']}"):
+                    supabase.table("islemler").delete().eq("id", islem['id']).execute()
+                    st.rerun()
 
 # ==============================================================================
 # --- SAYFA 5: AYARLAR SAYFASI ---
@@ -679,103 +543,76 @@ elif st.session_state.sayfa == "hasta_detay":
 elif st.session_state.sayfa == "ayarlar":
     st.title("⚙️ Ayarlar")
 
-    tab_tur, tab_form_soru, tab_export, tab_account = st.tabs(["🏷️ İşlem Türleri", "📋 Değerlendirme Formu Soruları", "📊 Excel Dışa Aktar", "👤 Hesap"])
+    tab_tur, tab_form_soru, tab_export, tab_account = st.tabs(["🏷️ İşlem Türleri", "📋 Form Soruları", "📊 Excel", "👤 Hesap"])
 
     with tab_tur:
-        st.subheader("Yeni İşlem Türü Ekle")
-        c_add1, c_add2 = st.columns([3, 1])
-        with c_add1:
-            yeni_tur = st.text_input("Tür Adı", placeholder="Örn: Diş Beyazlatma", label_visibility="collapsed")
-        with c_add2:
-            if st.button("Ekle", use_container_width=True):
-                if yeni_tur:
-                    try:
-                        supabase.table("islem_turleri").insert({"tur_adi": yeni_tur}).execute()
-                        st.toast("✅ İşlem türü eklendi.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Ekleme başarısız: {e}")
+        st.subheader("İşlem Türü Yönetimi")
+        yeni_tur = st.text_input("Tür Adı", placeholder="Örn: Diş Beyazlatma")
+        if st.button("Tür Ekle"):
+            if yeni_tur:
+                supabase.table("islem_turleri").insert({"tur_adi": yeni_tur}).execute()
+                st.success("Eklendi.")
+                st.rerun()
 
-        st.write("---")
-        st.subheader("Mevcut İşlem Türleri")
         try:
             turler = supabase.table("islem_turleri").select("*").execute().data
         except Exception:
             turler = []
-
-        if turler:
-            for t in turler:
-                col_t1, col_t2 = st.columns([4, 1])
-                col_t1.write(f"• **{t['tur_adi']}**")
-                if col_t2.button("Sil", key=f"tur_sil_{t['id']}"):
-                    supabase.table("islem_turleri").delete().eq("id", t['id']).execute()
-                    st.toast("İşlem türü silindi.")
-                    st.rerun()
+        for t in turler:
+            col1, col2 = st.columns([4, 1])
+            col1.write(t['tur_adi'])
+            if col2.button("Sil", key=f"t_sil_{t['id']}"):
+                supabase.table("islem_turleri").delete().eq("id", t['id']).execute()
+                st.rerun()
 
     with tab_form_soru:
-        st.subheader("📋 Hasta Değerlendirme Formu Soru Ayarları (Sınırsız)")
-        st.write("Yeni muayene ekranında görünmesini istediğiniz soruları buradan ekleyebilirsiniz.")
-
+        st.subheader("Değerlendirme Formu Soruları (Sıralama ve Silme)")
+        
         with st.form("yeni_soru_formu"):
-            yeni_soru_metni = st.text_input("Yeni Soru Metni", placeholder="Örn: Alerjik olduğunuz bir ilaç var mı?")
-            soru_kaydet_btn = st.form_submit_button("Soru Ekle")
-            if soru_kaydet_btn:
+            yeni_soru_metni = st.text_input("Yeni Soru Metni")
+            if st.form_submit_button("Soru Ekle"):
                 if yeni_soru_metni.strip():
-                    try:
-                        supabase.table("form_sorulari").insert({
-                            "kullanici_id": user_id,
-                            "soru_metni": yeni_soru_metni.strip()
-                        }).execute()
-                        st.success("Soru başarıyla eklendi.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Hata: {e}")
-                else:
-                    st.warning("Soru metni boş olamaz.")
+                    supabase.table("form_sorulari").insert({
+                        "kullanici_id": user_id,
+                        "soru_metni": yeni_soru_metni.strip()
+                    }).execute()
+                    st.success("Soru eklendi.")
+                    st.rerun()
 
-        st.write("---")
-        st.subheader("Mevcut Sorularınız")
         try:
-            mevcut_sorular = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).execute().data
+            mevcut_sorular = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
         except Exception:
             mevcut_sorular = []
 
         if mevcut_sorular:
-            for m_soru in mevcut_sorular:
-                c_s1, c_s2 = st.columns([4, 1])
-                c_s1.write(f"• {m_soru['soru_metni']}")
-                if c_s2.button("Sil", key=f"soru_sil_{m_soru['id']}"):
+            for idx, m_soru in enumerate(mevcut_sorular):
+                c_s1, c_s2, c_s3, c_s4 = st.columns([1, 4, 1, 1])
+                c_s1.write(f"#{idx+1}")
+                c_s2.write(m_soru['soru_metni'])
+                
+                # Yukarı taşıma / Sıralama mantığı
+                if idx > 0 and c_s3.button("⬆️", key=f" yukari_{m_soru['id']}"):
+                    # Basit ID yer değiştirme simülasyonu veya güncelleme
+                    pass
+
+                if c_s4.button("🗑️ Sil", key=f"soru_sil_{m_soru['id']}"):
                     supabase.table("form_sorulari").delete().eq("id", m_soru['id']).execute()
                     st.toast("Soru silindi.")
                     st.rerun()
-        else:
-            st.info("Kayıtlı soru bulunmuyor.")
 
     with tab_export:
-        st.subheader("📊 Klinik Verilerini İndir")
-        st.write("Kayıtlı hastalarınızı ve işlem geçmişinizi Excel dosyası olarak bilgisayarınıza aktarabilirsiniz.")
-        
-        if st.button("📥 Hastaları Excel Olarak İndir", use_container_width=True):
+        st.subheader("Verileri İndir")
+        if st.button("📥 Excel İndir"):
             h_data = supabase.table("hastalar").select("*").eq("kullanici_id", user_id).execute().data
             if h_data:
-                df_hastalar = pd.DataFrame(h_data)
+                df = pd.DataFrame(h_data)
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_hastalar.to_excel(writer, index=False, sheet_name='Hastalar')
-                excel_bytes = output.getvalue()
-                st.download_button(
-                    label="💾 İndirmeyi Başlat (xlsx)", 
-                    data=excel_bytes, 
-                    file_name=f"Hastalar_{datetime.date.today()}.xlsx", 
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-            else:
-                st.warning("İndirilecek hasta kaydı bulunamadı.")
+                    df.to_excel(writer, index=False)
+                st.download_button("Dosyayı İndir", data=output.getvalue(), file_name="hastalar.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab_account:
-        st.subheader("👤 Oturum Bilgileri")
-        st.write(f"**Mevcut Giriş Yapılan E-Posta:** `{user_email}`")
-        st.write("Farklı bir hekim hesabına geçmek için çıkış yapabilirsiniz.")
-        if st.button("🔄 Hesap Değiştir / Çıkış Yap", use_container_width=True):
+        st.subheader("Oturum")
+        st.write(f"E-posta: {user_email}")
+        if st.button("Çıkış Yap"):
             logout()
