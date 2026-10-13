@@ -46,6 +46,16 @@ if "dis_islemleri_gecici" not in st.session_state:
 if "yeni_muayene_form_cevaplari" not in st.session_state:
     st.session_state.yeni_muayene_form_cevaplari = {}
 
+# Varsayılan Renk Ayarları
+if "renk_saglikli" not in st.session_state:
+    st.session_state.renk_saglikli = "#10b981" # Yeşil
+if "renk_planlanan" not in st.session_state:
+    st.session_state.renk_planlanan = "#3b82f6" # Mavi
+if "renk_devam" not in st.session_state:
+    st.session_state.renk_devam = "#f59e0b" # Turuncu/Sarı
+if "renk_cekilecek" not in st.session_state:
+    st.session_state.renk_cekilecek = "#ef4444" # Kırmızı
+
 # --- AUTHENTICATION FUNCTIONS ---
 def login(email, password):
     try:
@@ -162,47 +172,95 @@ st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
     logout()
 
-# --- ANATOMİK DİŞ SVG ÇİZİMİ ---
-def get_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True, is_selected=False):
+# --- ANATOMİK DİŞ SVG ÇİZİM FONKSİYONU ---
+def get_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True):
     crown_y = "40" if is_upper else "10"
     root_y = "10" if is_upper else "40"
     crown_height = "30"
-    
-    border_color = "#2563eb" if is_selected else "#334155"
-    border_width = "2.5" if is_selected else "1.2"
-    fill_color = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
+    border_color = "#334155"
 
     d_str = str(dis_no)
     if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"]:
-        # Molar (Büyük Azı)
         path_d = f"M8,{crown_y} C 3,{root_y} 12,5 15,{root_y} C 18,{root_y} 22,5 25,{root_y} C 28,{root_y} 37,5 32,{crown_y} Z"
         rect_w = 28
         rect_x = 6
     elif d_str in ["15","14","24","25","45","44","35","34"]:
-        # Premolar (Küçük Azı)
         path_d = f"M10,{crown_y} C 6,{root_y} 15,5 20,{root_y} C 25,5 34,{root_y} 30,{crown_y} Z"
         rect_w = 24
         rect_x = 8
     elif d_str in ["13","23","43","33"]:
-        # Kanin (Köpek Dişi)
         path_d = f"M12,{crown_y} C 8,{root_y} 20,2 20,{root_y} C 20,2 32,{root_y} 28,{crown_y} Z"
         rect_w = 22
         rect_x = 9
     else:
-        # Kesici Dişler
         path_d = f"M13,{crown_y} C 10,{root_y} 20,5 20,{root_y} C 20,5 30,{root_y} 27,{crown_y} Z"
         rect_w = 20
         rect_x = 10
 
+    # Alt kutucuk boyası
+    box_y = "72"
+    box_color = durumsal_renk if durumsal_renk != "#ffffff" else "#e2e8f0"
+
     svg_content = f'''
-    <svg viewBox="0 0 40 75" width="100%" height="75px" style="background-color: transparent;">
+    <svg viewBox="0 0 40 90" width="100%" height="90px">
         <!-- Kök -->
-        <path d="{path_d}" fill="#fecaca" stroke="{border_color}" stroke-width="{border_width}"/>
+        <path d="{path_d}" fill="#fecaca" stroke="{border_color}" stroke-width="1.2"/>
         <!-- Kron / Taç -->
-        <rect x="{rect_x}" y="{crown_y}" width="{rect_w}" height="{crown_height}" rx="4" fill="{fill_color}" stroke="{border_color}" stroke-width="{border_width}"/>
+        <rect x="{rect_x}" y="{crown_y}" width="{rect_w}" height="{crown_height}" rx="4" fill="#ffffff" stroke="{border_color}" stroke-width="1.2"/>
+        <!-- Diş Numarası ve İşlem Renkli Kutucuğu -->
+        <rect x="5" y="70" width="30" height="18" rx="4" fill="{box_color}" stroke="{border_color}" stroke-width="1"/>
+        <text x="20" y="83" font-size="10" font-family="Arial" font-weight="bold" fill="#0f172a" text-anchor="middle">{dis_no}</text>
     </svg>
     '''
     return svg_content
+
+def get_color_for_tooth(d_no):
+    if d_no in st.session_state.dis_islemleri_gecici:
+        durum = st.session_state.dis_islemleri_gecici[d_no].get("durum", "Planlanan")
+        if durum == "Sağlıklı": return st.session_state.renk_saglikli
+        if durum == "Planlanan": return st.session_state.renk_planlanan
+        if durum == "Devam Ediyor": return st.session_state.renk_devam
+        if durum == "Çekilecek": return st.session_state.renk_cekilecek
+    return "#ffffff"
+
+# --- POP-UP DİALOG DİŞ DİYAGRAMI ---
+@st.dialog("🦷 Ağız ve Diş Tedavi Planı Şeması", width="large")
+def show_tooth_diagram_popup():
+    st.markdown(
+        "<div style='display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: gray; margin-bottom: 5px;'>"
+        "<span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
+    alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
+
+    cols_ust = st.columns(16)
+    for idx, d_no in enumerate(ust_disler):
+        color = get_color_for_tooth(d_no)
+        svg = get_tooth_svg(d_no, color, is_upper=True)
+        cols_ust[idx].markdown(svg, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+    cols_alt = st.columns(16)
+    for idx, d_no in enumerate(alt_disler):
+        color = get_color_for_tooth(d_no)
+        svg = get_tooth_svg(d_no, color, is_upper=False)
+        cols_alt[idx].markdown(svg, unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px; font-weight: bold; font-size: 13px;">
+            <div><span style="color: {st.session_state.renk_saglikli};">■</span> Sağlıklı</div>
+            <div><span style="color: {st.session_state.renk_planlanan};">■</span> Planlanan</div>
+            <div><span style="color: {st.session_state.renk_devam};">■</span> Devam Ediyor</div>
+            <div><span style="color: {st.session_state.renk_cekilecek};">■</span> Çekilecek</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -342,67 +400,34 @@ elif st.session_state.sayfa == "yeni_muayene":
     muayene_tarihi = st.date_input("Muayene Tarihi", datetime.date.today())
     st.markdown("---")
 
-    # --- ANATOMİK DİŞ DİYAGRAMI ---
-    st.subheader("⌨️ Diş Diyagramı")
-    st.markdown(
-        "<div style='display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: gray; margin-bottom: 5px;'>"
-        "<span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span>"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    # POP-UP / PLAN GÖRSELİ BUTONU
+    col_t1, col_t2 = st.columns([3, 1])
+    with col_t1:
+        st.subheader("⌨️ Diş Seçim Tablosu")
+    with col_t2:
+        if st.button("🖼️ Plan Görselini Göster", use_container_width=True, type="primary"):
+            show_tooth_diagram_popup()
 
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-    def get_color_for_tooth(d_no):
-        if d_no in st.session_state.dis_islemleri_gecici:
-            durum = st.session_state.dis_islemleri_gecici[d_no].get("durum", "Planlanan")
-            if durum == "Sağlıklı": return "#10b981"
-            if durum == "Planlanan": return "#3b82f6"
-            if durum == "Devam Ediyor": return "#f59e0b"
-            if durum == "Çekilecek": return "#ef4444"
-        return "#ffffff"
-
-    # Üst Çene Çizimi ve Numaralandırılmış Butonlar
+    st.write("**Üst Çene Dişleri:**")
     cols_ust = st.columns(16)
     for idx, d_no in enumerate(ust_disler):
-        color = get_color_for_tooth(d_no)
-        is_selected = (st.session_state.aktif_modal_dis == d_no)
-        svg = get_tooth_svg(d_no, color, is_upper=True, is_selected=is_selected)
-        with cols_ust[idx]:
-            st.markdown(svg, unsafe_allow_html=True)
-            # Numaralandırılmış Buton
-            if st.button(f"{d_no}", key=f"btn_ust_{d_no}", use_container_width=True):
-                st.session_state.aktif_modal_dis = d_no
+        is_secili = d_no in st.session_state.dis_islemleri_gecici
+        btn_label = f"📍 {d_no}" if is_secili else f"{d_no}"
+        if cols_ust[idx].button(btn_label, key=f"btn_u_{d_no}", use_container_width=True):
+            st.session_state.aktif_modal_dis = d_no
 
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-
-    # Alt Çene Çizimi ve Numaralandırılmış Butonlar
+    st.write("**Alt Çene Dişleri:**")
     cols_alt = st.columns(16)
     for idx, d_no in enumerate(alt_disler):
-        color = get_color_for_tooth(d_no)
-        is_selected = (st.session_state.aktif_modal_dis == d_no)
-        svg = get_tooth_svg(d_no, color, is_upper=False, is_selected=is_selected)
-        with cols_alt[idx]:
-            # Numaralandırılmış Buton
-            if st.button(f"{d_no}", key=f"btn_alt_{d_no}", use_container_width=True):
-                st.session_state.aktif_modal_dis = d_no
-            st.markdown(svg, unsafe_allow_html=True)
+        is_secili = d_no in st.session_state.dis_islemleri_gecici
+        btn_label = f"📍 {d_no}" if is_secili else f"{d_no}"
+        if cols_alt[idx].button(btn_label, key=f"btn_a_{d_no}", use_container_width=True):
+            st.session_state.aktif_modal_dis = d_no
 
-    # Durum Göstergesi (Lejant)
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px; font-weight: bold; font-size: 13px;">
-            <div><span style="color: #10b981;">■</span> Sağlıklı</div>
-            <div><span style="color: #3b82f6;">■</span> Planlanan</div>
-            <div><span style="color: #f59e0b;">■</span> Devam Ediyor</div>
-            <div><span style="color: #ef4444;">■</span> Çekilecek</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # POP-UP / İŞLEM AÇILIR EKRANI
+    # SEÇİLİ DİŞ İŞLEM PANELİ
     if st.session_state.aktif_modal_dis:
         aktif_d = st.session_state.aktif_modal_dis
         st.markdown(f"---")
@@ -620,24 +645,6 @@ elif st.session_state.sayfa == "hasta_detay":
                     st.markdown("### 📝 Muayene Notu / Açıklama")
                     st.write(genel_not_goster if genel_not_goster else "-")
 
-                    st.markdown("### 🦷 Kayıtlı Diş Şeması Durumu")
-                    
-                    ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
-                    alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
-
-                    cols_ust = st.columns(16)
-                    for idx, d_no in enumerate(ust_disler):
-                        durum = dis_plani_data.get(d_no, {}).get("durum", "Sağlıklı") if d_no in dis_plani_data else "Sağlıklı"
-                        color = "#3b82f6" if d_no in dis_plani_data else "#ffffff"
-                        svg = get_tooth_svg(d_no, color, is_upper=True)
-                        cols_ust[idx].markdown(svg, unsafe_allow_html=True)
-
-                    cols_alt = st.columns(16)
-                    for idx, d_no in enumerate(alt_disler):
-                        color = "#3b82f6" if d_no in dis_plani_data else "#ffffff"
-                        svg = get_tooth_svg(d_no, color, is_upper=False)
-                        cols_alt[idx].markdown(svg, unsafe_allow_html=True)
-
                     if dis_plani_data:
                         st.write("---")
                         st.write("**Planlanan Diş İşlemleri Detayları:**")
@@ -673,7 +680,15 @@ elif st.session_state.sayfa == "hasta_detay":
 elif st.session_state.sayfa == "ayarlar":
     st.title("⚙️ Ayarlar")
 
-    tab_tur, tab_form_soru, tab_export, tab_account = st.tabs(["🏷️ İşlem Türleri", "📋 Form Soruları", "📊 Excel", "👤 Hesap"])
+    tab_renk, tab_tur, tab_form_soru, tab_export, tab_account = st.tabs(["🎨 Durum Renkleri", "🏷️ İşlem Türleri", "📋 Form Soruları", "📊 Excel", "👤 Hesap"])
+
+    with tab_renk:
+        st.subheader("Diş Şeması Durum Renklerini Özelleştirin")
+        st.session_state.renk_saglikli = st.color_picker("Sağlıklı Diş Rengi", st.session_state.renk_saglikli)
+        st.session_state.renk_planlanan = st.color_picker("Planlanan İşlem Rengi", st.session_state.renk_planlanan)
+        st.session_state.renk_devam = st.color_picker("Devam Eden İşlem Rengi", st.session_state.renk_devam)
+        st.session_state.renk_cekilecek = st.color_picker("Çekilecek Diş Rengi", st.session_state.renk_cekilecek)
+        st.success("Renkler başarıyla kaydedildi!")
 
     with tab_tur:
         st.subheader("İşlem Türü Yönetimi")
