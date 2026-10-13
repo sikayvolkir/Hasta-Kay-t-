@@ -162,6 +162,61 @@ st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
     logout()
 
+# --- ANATOMİK DİŞ SVG BİLEŞENLERİ ---
+def get_tooth_svg(dis_no, durumsal_renk="#3b82f6", is_upper=True):
+    # Üst çenede kökler yukarıda, alt çenede kökler aşağıda
+    crown_y = "42" if is_upper else "10"
+    root_y = "10" if is_upper else "42"
+    root_height = "32"
+    crown_height = "28"
+    
+    # Diş tipine göre genişlikler
+    d_str = str(dis_no)
+    if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"]:
+        # Molarlar (Aptal/Büyük azı) - 3 köklü/geniş görünüm
+        svg_content = f'''
+        <svg viewBox="0 0 40 80" width="100%" height="80px">
+            <!-- Root / Kök -->
+            <path d="M10,{crown_y} C 5,{root_y} 12,5 15,{root_y} C 18,{root_y} 22,5 25,{root_y} C 28,{root_y} 35,5 30,{crown_y} Z" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+            <!-- Crown / Kron -->
+            <rect x="5" y="{crown_y}" width="30" height="{crown_height}" rx="6" fill="{durumsal_renk}" stroke="#1e3a8a" stroke-width="1.5"/>
+            <!-- Number Circle -->
+            <circle cx="20" cy="72" r="7" fill="#475569" />
+            <text x="20" y="75" font-size="9" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">{dis_no}</text>
+        </svg>
+        '''
+    elif d_str in ["15","14","24","25","45","44","35","34"]:
+        # Premolar (Küçük azı)
+        svg_content = f'''
+        <svg viewBox="0 0 40 80" width="100%" height="80px">
+            <path d="M12,{crown_y} C 8,{root_y} 15,5 20,{root_y} C 25,5 32,{root_y} 28,{crown_y} Z" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+            <rect x="7" y="{crown_y}" width="26" height="{crown_height}" rx="5" fill="{durumsal_renk}" stroke="#1e3a8a" stroke-width="1.5"/>
+            <circle cx="20" cy="72" r="7" fill="#475569" />
+            <text x="20" y="75" font-size="9" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">{dis_no}</text>
+        </svg>
+        '''
+    elif d_str in ["13","23","43","33"]:
+        # Kanin (Köpek dişi) - Uzun tek kök
+        svg_content = f'''
+        <svg viewBox="0 0 40 80" width="100%" height="80px">
+            <path d="M14,{crown_y} C 10,{root_y} 20,2 20,{root_y} C 20,2 30,{root_y} 26,{crown_y} Z" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+            <path d="M9,{crown_y} L20,{int(crown_y)+25} L31,{crown_y} Z" fill="{durumsal_renk}" stroke="#1e3a8a" stroke-width="1.5"/>
+            <circle cx="20" cy="72" r="7" fill="#475569" />
+            <text x="20" y="75" font-size="9" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">{dis_no}</text>
+        </svg>
+        '''
+    else:
+        # Kesici dişler
+        svg_content = f'''
+        <svg viewBox="0 0 40 80" width="100%" height="80px">
+            <path d="M15,{crown_y} C 12,{root_y} 20,5 20,{root_y} C 20,5 28,{root_y} 25,{crown_y} Z" fill="#fecaca" stroke="#dc2626" stroke-width="1.2"/>
+            <rect x="10" y="{crown_y}" width="20" height="{crown_height}" rx="3" fill="{durumsal_renk}" stroke="#1e3a8a" stroke-width="1.5"/>
+            <circle cx="20" cy="72" r="7" fill="#475569" />
+            <text x="20" y="75" font-size="9" font-family="Arial" font-weight="bold" fill="white" text-anchor="middle">{dis_no}</text>
+        </svg>
+        '''
+    return svg_content
+
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
 # ==============================================================================
@@ -261,7 +316,7 @@ elif st.session_state.sayfa == "yeni_hasta":
 # --- YENİ MUAYENE EKRANI VE ÖZELLEŞTİRİLMİŞ ANATOMİK DİŞ DİYAGRAMI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_muayene":
-    st.title("🦷 Yeni Muayene ve Tedavi Planı")
+    st.title("🦷 Diş Tedavi Planlama")
 
     try:
         hastalar_res = supabase.table("hastalar").select("id, ad_soyad, telefon").eq("kullanici_id", user_id).order("ad_soyad").execute().data
@@ -301,10 +356,10 @@ elif st.session_state.sayfa == "yeni_muayene":
     st.markdown("---")
 
     # --- ANATOMİK DİŞ DİYAGRAMI ---
-    st.markdown("### 🦷 Diş Diyagramı")
+    st.subheader("⌨️ Diş Diyagramı")
     st.markdown(
-        "<div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; color: gray; margin-bottom: 2px;'>"
-        "<span>HASTANIN SAĞI</span><span>HASTANIN SOLU</span>"
+        "<div style='display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: gray; margin-bottom: 5px;'>"
+        "<span>Sinüs Lift (Sağ)</span><span>Sinüs Lift (Sol)</span>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -312,41 +367,54 @@ elif st.session_state.sayfa == "yeni_muayene":
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-    def get_dis_ikonu(dis_no):
-        d_str = str(dis_no)
-        if d_str in ["18", "17", "16", "26", "27", "28", "48", "47", "46", "36", "37", "38"]:
-            return "🦷"
-        elif d_str in ["15", "14", "24", "25", "45", "44", "35", "34"]:
-            return "🦷"
-        elif d_str in ["13", "23", "43", "33"]:
-            return "🦷"
-        else:
-            return "🦷"
+    def get_color_for_tooth(d_no):
+        if d_no in st.session_state.dis_islemleri_gecici:
+            durum = st.session_state.dis_islemleri_gecici[d_no].get("durum", "Planlanan")
+            if durum == "Sağlıklı": return "#10b981" # Yeşil
+            if durum == "Planlanan": return "#3b82f6" # Mavi
+            if durum == "Devam Ediyor": return "#f59e0b" # Sarı/Turuncu
+            if durum == "Çekilecek": return "#ef4444" # Kırmızı
+        return "#ffffff"
 
-    st.markdown("<p style='font-size:10px; margin-bottom:1px; color:#666;'><b>ÜST ÇENE</b></p>", unsafe_allow_html=True)
+    # Üst Çene Görsel Çizimi
     cols_ust = st.columns(16)
     for idx, d_no in enumerate(ust_disler):
-        is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
-        kutu_durum = "🟦" if is_secili else "⬜"
-        ikon = get_dis_ikonu(d_no)
-        btn_label = f"{ikon}\n{d_no}\n{kutu_durum}"
-        if cols_ust[idx].button(btn_label, key=f"ust_d_{d_no}", use_container_width=True):
-            st.session_state.aktif_modal_dis = d_no
+        color = get_color_for_tooth(d_no)
+        svg = get_tooth_svg(d_no, color, is_upper=True)
+        with cols_ust[idx]:
+            st.markdown(svg, unsafe_allow_html=True)
+            if st.button(f"Söz", key=f"btn_ust_{d_no}", use_container_width=True):
+                st.session_state.aktif_modal_dis = d_no
 
-    st.markdown("<p style='font-size:10px; margin-top:6px; margin-bottom:1px; color:#666;'><b>ALT ÇENE</b></p>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+
+    # Alt Çene Görsel Çizimi
     cols_alt = st.columns(16)
     for idx, d_no in enumerate(alt_disler):
-        is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
-        kutu_durum = "🟦" if is_secili else "⬜"
-        ikon = get_dis_ikonu(d_no)
-        btn_label = f"{ikon}\n{d_no}\n{kutu_durum}"
-        if cols_alt[idx].button(btn_label, key=f"alt_d_{d_no}", use_container_width=True):
-            st.session_state.aktif_modal_dis = d_no
+        color = get_color_for_tooth(d_no)
+        svg = get_tooth_svg(d_no, color, is_upper=False)
+        with cols_alt[idx]:
+            st.markdown(svg, unsafe_allow_html=True)
+            if st.button(f"Söz", key=f"btn_alt_{d_no}", use_container_width=True):
+                st.session_state.aktif_modal_dis = d_no
+
+    # Durum Göstergesi (Lejant)
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px; font-weight: bold; font-size: 13px;">
+            <div><span style="color: #10b981;">■</span> Sağlıklı</div>
+            <div><span style="color: #3b82f6;">■</span> Planlanan</div>
+            <div><span style="color: #f59e0b;">■</span> Devam Ediyor</div>
+            <div><span style="color: #ef4444;">■</span> Çekilecek</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     if st.session_state.aktif_modal_dis:
         aktif_d = st.session_state.aktif_modal_dis
         st.markdown(f"---")
-        st.markdown(f"### ⚙️ Seçilen Diş: **{aktif_d} Nolu Diş** İşlem Tanımlama")
+        st.markdown(f"### ⚙️ **{aktif_d} Nolu Diş** İçin İşlem ve Durum Tanımlama")
         
         try:
             tur_data = supabase.table("islem_turleri").select("tur_adi").execute().data
@@ -355,26 +423,28 @@ elif st.session_state.sayfa == "yeni_muayene":
             tum_islemler = ["Dolgu", "Kanal", "Çekim", "Kron", "İmplant"]
 
         with st.form(key=f"dis_form_{aktif_d}"):
-            st.write("Bu diş için yapılacak işlemleri seçin (Birden fazla seçilebilir):")
+            durum_secim = st.selectbox("Dişin Durumu", ["Planlanan", "Devam Ediyor", "Çekilecek", "Sağlıklı"])
+            st.write("Yapılacak İşlemler:")
             secilen_islemler = []
             for islem_adi in tum_islemler:
                 if st.checkbox(islem_adi, key=f"chk_{aktif_d}_{islem_adi}"):
                     secilen_islemler.append(islem_adi)
 
             islem_metin_kutu = st.text_input("Diş Notu / Açıklama", key=f"txt_{aktif_d}")
-            ileri_tarih = st.date_input("İleriye Yönelik İşlem Tarihi", datetime.date.today(), key=f"date_{aktif_d}")
+            fiyat = st.number_input("Ücret (TL)", min_value=0.0, step=100.0, key=f"price_{aktif_d}")
 
             col_m1, col_m2 = st.columns(2)
             kaydet_dis = col_m1.form_submit_button("💾 Diş İşlemini Kaydet", use_container_width=True)
-            kapat_dis = col_m2.form_submit_button("✖️ Kapat / Vazgeç", use_container_width=True)
+            kapat_dis = col_m2.form_submit_button("✖️ İptal", use_container_width=True)
 
             if kaydet_dis:
                 st.session_state.dis_islemleri_gecici[aktif_d] = {
+                    "durum": durum_secim,
                     "islemler": secilen_islemler,
                     "not": islem_metin_kutu,
-                    "tarih": ileri_tarih.isoformat()
+                    "fiyat": fiyat
                 }
-                st.success(f"{aktif_d} nolu diş planı güncellendi.")
+                st.success(f"{aktif_d} nolu diş güncellendi.")
                 st.session_state.aktif_modal_dis = None
                 st.rerun()
 
@@ -383,9 +453,13 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.rerun()
 
     if st.session_state.dis_islemleri_gecici:
-        st.write("📋 **Planlanan Diş İşlemleri Özeti:**")
+        st.write("📋 **Planlanan Tedavi Listesi:**")
+        toplam_tutar = 0.0
         for d_no, d_bilgi in st.session_state.dis_islemleri_gecici.items():
-            st.write(f"- **Diş {d_no}:** {', '.join(d_bilgi['islemler'])} | Tarih: {d_bilgi['tarih']} | Not: {d_bilgi['not']}")
+            fiyat_val = d_bilgi.get('fiyat', 0.0)
+            toplam_tutar += fiyat_val
+            st.write(f"- **Diş {d_no} [{d_bilgi['durum']}]:** {', '.join(d_bilgi['islemler'])} | Ücret: {fiyat_val} TL | Not: {d_bilgi['not']}")
+        st.markdown(f"**Genel Toplam Tutar:** {toplam_tutar:.2f} TL")
 
     st.markdown("---")
 
@@ -409,7 +483,7 @@ elif st.session_state.sayfa == "yeni_muayene":
     muayene_genel_not = st.text_area("Muayene Notu / Açıklama")
     muayene_fotolar = st.file_uploader("Görsel Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key="muayene_foto_yukle")
 
-    if st.button("💾 Muayeneyi Tamamen Kaydet", use_container_width=True):
+    if st.button("💾 Planı ve Muayeneyi Kaydet", use_container_width=True):
         if not hedef_hasta_id:
             st.warning("Lütfen geçerli bir hasta seçin.")
         else:
@@ -442,7 +516,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.error(f"Kayıt sırasında hata oluştu: {ex}")
 
 # ==============================================================================
-# --- SAYFA 3 (ESKİ): YENİ İŞLEM EKLE SAYFASI ---
+# --- SAYFA 3: YENİ İŞLEM EKLE SAYFASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_islem":
     st.title("💉 Yeni İşlem Ekle (Hızlı)")
@@ -485,7 +559,7 @@ elif st.session_state.sayfa == "yeni_islem":
                 st.error(f"Hata: {ex}")
 
 # ==============================================================================
-# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ (DETAYLI GÖRÜNÜM) ---
+# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ ---
 # ==============================================================================
 elif st.session_state.sayfa == "hasta_detay":
     hasta_id = st.session_state.secili_hasta_id
@@ -552,35 +626,28 @@ elif st.session_state.sayfa == "hasta_detay":
                     st.write(genel_not_goster if genel_not_goster else "-")
 
                     st.markdown("### 🦷 Kayıtlı Diş Şeması Durumu")
-                    st.markdown(
-                        "<div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; color: gray; margin-bottom: 2px;'>"
-                        "<span>HASTANIN SAĞI</span><span>HASTANIN SOLU</span>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
                     
                     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
                     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-                    st.markdown("<p style='font-size:10px; margin-bottom:1px; color:#666;'><b>ÜST ÇENE</b></p>", unsafe_allow_html=True)
                     cols_ust = st.columns(16)
                     for idx, d_no in enumerate(ust_disler):
-                        is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
-                        kutu = "🟦" if is_secili else "⬜"
-                        cols_ust[idx].markdown(f"<div style='text-align:center; font-size:10px;'>🦷<br>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+                        durum = dis_plani_data.get(d_no, {}).get("durum", "Sağlıklı") if d_no in dis_plani_data else "Sağlıklı"
+                        color = "#3b82f6" if d_no in dis_plani_data else "#ffffff"
+                        svg = get_tooth_svg(d_no, color, is_upper=True)
+                        cols_ust[idx].markdown(svg, unsafe_allow_html=True)
 
-                    st.markdown("<p style='font-size:10px; margin-top:6px; margin-bottom:1px; color:#666;'><b>ALT ÇENE</b></p>", unsafe_allow_html=True)
                     cols_alt = st.columns(16)
                     for idx, d_no in enumerate(alt_disler):
-                        is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
-                        kutu = "🟦" if is_secili else "⬜"
-                        cols_alt[idx].markdown(f"<div style='text-align:center; font-size:10px;'>🦷<br>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+                        color = "#3b82f6" if d_no in dis_plani_data else "#ffffff"
+                        svg = get_tooth_svg(d_no, color, is_upper=False)
+                        cols_alt[idx].markdown(svg, unsafe_allow_html=True)
 
                     if dis_plani_data:
                         st.write("---")
                         st.write("**Planlanan Diş İşlemleri Detayları:**")
                         for d_no, d_bilgi in dis_plani_data.items():
-                            st.write(f"- **Diş {d_no}:** {', '.join(d_bilgi.get('islemler', []))} | Tarih: {d_bilgi.get('tarih', '-')} | Not: {d_bilgi.get('not', '-')}")
+                            st.write(f"- **Diş {d_no} [{d_bilgi.get('durum', '-')}]**: {', '.join(d_bilgi.get('islemler', []))} | Ücret: {d_bilgi.get('fiyat', 0)} TL | Not: {d_bilgi.get('not', '-')}")
 
                     if form_cevaplari_data:
                         st.markdown("---")
@@ -634,8 +701,7 @@ elif st.session_state.sayfa == "ayarlar":
                 st.rerun()
 
     with tab_form_soru:
-        st.subheader("Değerlendirme Formu Soruları (Sıralama ve Silme)")
-        
+        st.subheader("Değerlendirme Formu Soruları")
         with st.form("yeni_soru_formu"):
             yeni_soru_metni = st.text_input("Yeni Soru Metni")
             if st.form_submit_button("Soru Ekle"):
@@ -654,22 +720,10 @@ elif st.session_state.sayfa == "ayarlar":
 
         if mevcut_sorular:
             for idx, m_soru in enumerate(mevcut_sorular):
-                c_s1, c_s2, c_s3, c_s4 = st.columns([1, 4, 1, 1])
+                c_s1, c_s2, c_s3 = st.columns([1, 5, 1])
                 c_s1.write(f"#{idx+1}")
                 c_s2.write(m_soru['soru_metni'])
-                
-                if idx > 0 and c_s3.button("⬆️", key=f"yukari_{m_soru['id']}"):
-                    ustteki_soru = mevcut_sorular[idx - 1]
-                    try:
-                        supabase.table("form_sorulari").update({"soru_metni": "___TEMP___"}).eq("id", ustteki_soru['id']).execute()
-                        supabase.table("form_sorulari").update({"soru_metni": ustteki_soru['soru_metni']}).eq("id", m_soru['id']).execute()
-                        supabase.table("form_sorulari").update({"soru_metni": m_soru['soru_metni']}).eq("id", ustteki_soru['id']).execute()
-                        st.toast("Soru sırası değiştirildi.")
-                        st.rerun()
-                    except Exception as ex:
-                        st.error(f"Sıralama değiştirilirken hata oluştu: {ex}")
-
-                if c_s4.button("🗑️ Sil", key=f"soru_sil_{m_soru['id']}"):
+                if c_s3.button("🗑️ Sil", key=f"soru_sil_{m_soru['id']}"):
                     supabase.table("form_sorulari").delete().eq("id", m_soru['id']).execute()
                     st.toast("Soru silindi.")
                     st.rerun()
