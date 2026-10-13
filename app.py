@@ -325,9 +325,8 @@ elif st.session_state.sayfa == "yeni_muayene":
             cols_s = st.columns(len(aktif_dis_kumesi) if len(aktif_dis_kumesi) < 16 else 16)
             for i, d_kodu in enumerate(aktif_dis_kumesi):
                 with cols_s[i % len(cols_s)]:
-                    # Eğer bu diş için işlem planlanmışsa rengini/durumunu göster
                     islem_var = d_kodu in st.session_state.dis_islemleri_gecici
-                     kutu_bg = "🟦" if islem_var else "⬜"
+                    kutu_bg = "🟦" if islem_var else "⬜"
                     st.markdown(f"<div style='text-align:center;'><b>{d_kodu}</b><br>{kutu_bg}</div>", unsafe_allow_html=True)
 
             if st.button("✖️ Pop-Up'ı Kapat"):
@@ -590,9 +589,7 @@ elif st.session_state.sayfa == "ayarlar":
                 c_s1.write(f"#{idx+1}")
                 c_s2.write(m_soru['soru_metni'])
                 
-                # Yukarı taşıma / Sıralama mantığı
-                if idx > 0 and c_s3.button("⬆️", key=f" yukari_{m_soru['id']}"):
-                    # Basit ID yer değiştirme simülasyonu veya güncelleme
+                if idx > 0 and c_s3.button("⬆️", key=f"yukari_{m_soru['id']}"):
                     pass
 
                 if c_s4.button("🗑️ Sil", key=f"soru_sil_{m_soru['id']}"):
