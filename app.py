@@ -45,8 +45,6 @@ if "dis_islemleri_gecici" not in st.session_state:
     st.session_state.dis_islemleri_gecici = {}
 if "yeni_muayene_form_cevaplari" not in st.session_state:
     st.session_state.yeni_muayene_form_cevaplari = {}
-if "dis_semasi_popup_acik" not in st.session_state:
-    st.session_state.dis_semasi_popup_acik = False
 
 # --- AUTHENTICATION FUNCTIONS ---
 def login(email, password):
@@ -260,12 +258,11 @@ elif st.session_state.sayfa == "yeni_hasta":
                 st.warning("Lütfen Hasta Adı Soyadı ve Telefon alanlarını doldurun.")
 
 # ==============================================================================
-# --- YENİ MUAYENE EKRANI VE DİŞ ŞEMASI POP-UP ---
+# --- YENİ MUAYENE EKRANI VE SABİT 32 DİŞ ŞEMASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_muayene":
     st.title("🦷 Yeni Muayene ve Tedavi Planı")
 
-    # 1. Hasta Seçimi veya Yeni Hasta Ekleme
     try:
         hastalar_res = supabase.table("hastalar").select("id, ad_soyad, telefon").eq("kullanici_id", user_id).order("ad_soyad").execute().data
     except Exception:
@@ -303,55 +300,32 @@ elif st.session_state.sayfa == "yeni_muayene":
     muayene_tarihi = st.date_input("Muayene Tarihi", datetime.date.today())
     st.markdown("---")
 
-    # --- PLAN GÖRSELİ / POP-UP BUTONU VE GÖRSEL GERİ BİLDİRİM ---
-    col_gorsel_btn, _ = st.columns([2, 2])
-    with col_gorsel_btn:
-        if st.button("📊 Plan Görseli (Diş Şeması)", use_container_width=True, type="primary"):
-            st.session_state.dis_semasi_popup_acik = True
+    st.subheader("🦷 Diş Şeması (Üst ve Alt Çene - 32 Diş)")
+    st.info("Üst çene dişleri üst sırada, alt çene dişleri alt sırada yer almaktadır. İşlem yapmak istediğiniz dişe tıklayın.")
 
-    # Pop-up Pencere Simülasyonu / Açılır Konteyner
-    if st.session_state.dis_semasi_popup_acik:
-        with st.container():
-            st.markdown("---")
-            st.markdown("### 🦷 Diş Şeması ve Durum Görseli (Pop-Up)")
-            st.info("Aşağıdaki diş şeması üzerinde planlanan veya yapılan işlemlerin renkli kutucuk durumlarını inceleyebilirsiniz.")
-            
-            # Kalıcı / Süt Dişleri Görsel Sekme Simülasyonu
-            sema_tipi = st.radio("Diş Grubu", ["Kalıcı dişler", "Süt dişleri"], horizontal=True, key="popup_sema_tipi")
-            
-            # Görsel Geri Bildirim: Dişlerin altındaki renkli kutucuklar grid yapısı
-            aktif_dis_kumesi = [str(i) for i in range(18, 11, -1)] + [str(i) for i in range(21, 29)] if sema_tipi == "Kalıcı dişler" else ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-            
-            cols_s = st.columns(len(aktif_dis_kumesi) if len(aktif_dis_kumesi) < 16 else 16)
-            for i, d_kodu in enumerate(aktif_dis_kumesi):
-                with cols_s[i % len(cols_s)]:
-                    islem_var = d_kodu in st.session_state.dis_islemleri_gecici
-                    kutu_bg = "🟦" if islem_var else "⬜"
-                    st.markdown(f"<div style='text-align:center;'><b>{d_kodu}</b><br>{kutu_bg}</div>", unsafe_allow_html=True)
+    ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
+    alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-            if st.button("✖️ Pop-Up'ı Kapat"):
-                st.session_state.dis_semasi_popup_acik = False
-                st.rerun()
-            st.markdown("---")
+    st.markdown("#### **ÜST ÇENE**")
+    cols_ust = st.columns(16)
+    for idx, d_no in enumerate(ust_disler):
+        is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
+        btn_label = f"{d_no}\n" + ("🟦" if is_secili else "⬜")
+        if cols_ust[idx].button(btn_label, key=f"ust_d_{d_no}", use_container_width=True):
+            st.session_state.aktif_modal_dis = d_no
 
-    # 3. Tedavi Planı Bölümü (Diş Seçimi)
-    st.subheader("🦷 Tedavi Planı (Diş Seçimi)")
-    dis_listesi = [
-        "18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28",
-        "48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38",
-        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"
-    ]
-
-    cols_dis = st.columns(8)
-    for idx, dis_no in enumerate(dis_listesi[:32]):
-        is_secili = dis_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[dis_no]["islemler"]) > 0
-        btn_label = f"🦷 {dis_no}" + (" 🟩" if is_secili else "")
-        if cols_dis[idx % 8].button(btn_label, key=f"dis_btn_{dis_no}"):
-            st.session_state.aktif_modal_dis = dis_no
+    st.markdown("#### **ALT ÇENE**")
+    cols_alt = st.columns(16)
+    for idx, d_no in enumerate(alt_disler):
+        is_secili = d_no in st.session_state.dis_islemleri_gecici and len(st.session_state.dis_islemleri_gecici[d_no]["islemler"]) > 0
+        btn_label = f"{d_no}\n" + ("🟦" if is_secili else "⬜")
+        if cols_alt[idx].button(btn_label, key=f"alt_d_{d_no}", use_container_width=True):
+            st.session_state.aktif_modal_dis = d_no
 
     if st.session_state.aktif_modal_dis:
         aktif_d = st.session_state.aktif_modal_dis
-        st.markdown(f"### ⚙️ Diş No: {aktif_d} - İşlem Tanımlama Penceresi")
+        st.markdown(f"---")
+        st.markdown(f"### ⚙️ Seçilen Diş: **{aktif_d} Nolu Diş** İşlem Tanımlama")
         
         try:
             tur_data = supabase.table("islem_turleri").select("tur_adi").execute().data
@@ -360,18 +334,18 @@ elif st.session_state.sayfa == "yeni_muayene":
             tum_islemler = ["Dolgu", "Kanal", "Çekim", "Kron", "İmplant"]
 
         with st.form(key=f"dis_form_{aktif_d}"):
-            st.write("Yapılacak İşlemleri Seçin:")
+            st.write("Bu diş için yapılacak işlemleri seçin (Birden fazla seçilebilir):")
             secilen_islemler = []
             for islem_adi in tum_islemler:
                 if st.checkbox(islem_adi, key=f"chk_{aktif_d}_{islem_adi}"):
                     secilen_islemler.append(islem_adi)
 
-            islem_metin_kutu = st.text_input("Ek Açıklama", key=f"txt_{aktif_d}")
+            islem_metin_kutu = st.text_input("Diş Notu / Açıklama", key=f"txt_{aktif_d}")
             ileri_tarih = st.date_input("İleriye Yönelik İşlem Tarihi", datetime.date.today(), key=f"date_{aktif_d}")
 
             col_m1, col_m2 = st.columns(2)
-            kaydet_dis = col_m1.form_submit_button("💾 Kaydet")
-            kapat_dis = col_m2.form_submit_button("✖️ Çarpı (Kapat)")
+            kaydet_dis = col_m1.form_submit_button("💾 Diş İşlemini Kaydet", use_container_width=True)
+            kapat_dis = col_m2.form_submit_button("✖️ Kapat / Vazgeç", use_container_width=True)
 
             if kaydet_dis:
                 st.session_state.dis_islemleri_gecici[aktif_d] = {
@@ -379,7 +353,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                     "not": islem_metin_kutu,
                     "tarih": ileri_tarih.isoformat()
                 }
-                st.success(f"{aktif_d} nolu diş eklendi.")
+                st.success(f"{aktif_d} nolu diş planı güncellendi.")
                 st.session_state.aktif_modal_dis = None
                 st.rerun()
 
@@ -394,7 +368,6 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
 
-    # 4. Hasta Değerlendirme Formu
     st.subheader("📋 Hasta Değerlendirme Formu")
     try:
         sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -491,7 +464,7 @@ elif st.session_state.sayfa == "yeni_islem":
                 st.error(f"Hata: {ex}")
 
 # ==============================================================================
-# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ ---
+# --- SAYFA 4: HASTA DETAY & İŞLEM GEÇMİŞİ (DETAYLI GÖRÜNÜM) ---
 # ==============================================================================
 elif st.session_state.sayfa == "hasta_detay":
     hasta_id = st.session_state.secili_hasta_id
@@ -529,12 +502,80 @@ elif st.session_state.sayfa == "hasta_detay":
         except Exception:
             islemler = []
 
-        for islem in islemler:
-            with st.expander(f"🗓️ {islem.get('islem_tarihi')} - {islem.get('islem_turu')}"):
-                st.text_area("Notlar", value=islem.get('hekim_notu', '-'), disabled=True, key=f"not_{islem['id']}")
-                if st.button("🗑️ Sil", key=f"sil_isl_{islem['id']}"):
-                    supabase.table("islemler").delete().eq("id", islem['id']).execute()
-                    st.rerun()
+        if not islemler:
+            st.info("Bu hastaya ait işlem geçmişi bulunmuyor.")
+        else:
+            for islem in islemler:
+                with st.expander(f"🗓️ {islem.get('islem_tarihi')} - {islem.get('islem_turu')}"):
+                    notlar_ham = islem.get('hekim_notu', '')
+                    
+                    genel_not_goster = notlar_ham
+                    dis_plani_data = {}
+                    form_cevaplari_data = {}
+                    
+                    try:
+                        if "[Diş Planı]:" in notlar_ham:
+                            parcalar = notlar_ham.split("[Diş Planı]:")
+                            genel_not_goster = parcalar[0].replace("[Muayene Notu]:", "").strip()
+                            kalan = parcalar[1]
+                            if "[Form Cevapları]:" in kalan:
+                                p2 = kalan.split("[Form Cevapları]:")
+                                dis_plani_str = p2[0].strip()
+                                form_str = p2[1].strip()
+                                dis_plani_data = json.loads(dis_plani_str)
+                                form_cevaplari_data = json.loads(form_str)
+                    except Exception:
+                        pass
+
+                    st.markdown("### 📝 Muayene Notu / Açıklama")
+                    st.write(genel_not_goster if genel_not_goster else "-")
+
+                    st.markdown("### 🦷 Kayıtlı Diş Şeması Durumu")
+                    ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
+                    alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
+
+                    st.markdown("**ÜST ÇENE**")
+                    cols_ust = st.columns(16)
+                    for idx, d_no in enumerate(ust_disler):
+                        is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
+                        kutu = "🟦" if is_secili else "⬜"
+                        cols_ust[idx].markdown(f"<div style='text-align:center;'>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+
+                    st.markdown("**ALT ÇENE**")
+                    cols_alt = st.columns(16)
+                    for idx, d_no in enumerate(alt_disler):
+                        is_secili = d_no in dis_plani_data and len(dis_plani_data[d_no].get("islemler", [])) > 0
+                        kutu = "🟦" if is_secili else "⬜"
+                        cols_alt[idx].markdown(f"<div style='text-align:center;'>{d_no}<br>{kutu}</div>", unsafe_allow_html=True)
+
+                    if dis_plani_data:
+                        st.write("---")
+                        st.write("**Planlanan Diş İşlemleri Detayları:**")
+                        for d_no, d_bilgi in dis_plani_data.items():
+                            st.write(f"- **Diş {d_no}:** {', '.join(d_bilgi.get('islemler', []))} | Tarih: {d_bilgi.get('tarih', '-')} | Not: {d_bilgi.get('not', '-')}")
+
+                    if form_cevaplari_data:
+                        st.markdown("---")
+                        st.markdown("### 📋 Hasta Değerlendirme Formu Yanıtları")
+                        for soru, cevap in form_cevaplari_data.items():
+                            st.write(f"- **{soru}:** {cevap if cevap else '-'}")
+
+                    foto_raw = islem.get("fotograf_url")
+                    if foto_raw:
+                        urls = [u.strip() for u in foto_raw.split(",") if u.strip()]
+                        if urls:
+                            st.markdown("---")
+                            st.markdown("### 📸 Yüklenen Görseller / Röntgenler")
+                            img_cols = st.columns(min(len(urls), 3))
+                            for idx, u in enumerate(urls):
+                                with img_cols[idx % 3]:
+                                    st.image(u, use_container_width=True)
+
+                    st.markdown("---")
+                    if st.button("🗑️ Bu Muayene Kaydını Sil", key=f"sil_isl_{islem['id']}"):
+                        supabase.table("islemler").delete().eq("id", islem['id']).execute()
+                        st.toast("Muayene kaydı silindi.")
+                        st.rerun()
 
 # ==============================================================================
 # --- SAYFA 5: AYARLAR SAYFASI ---
@@ -589,8 +630,17 @@ elif st.session_state.sayfa == "ayarlar":
                 c_s1.write(f"#{idx+1}")
                 c_s2.write(m_soru['soru_metni'])
                 
+                # Yukarı taşıma (Sıralama değiştirme) mantığı
                 if idx > 0 and c_s3.button("⬆️", key=f"yukari_{m_soru['id']}"):
-                    pass
+                    ustteki_soru = mevcut_sorular[idx - 1]
+                    # Üstteki soru ile alttaki sorunun metinlerini yer değiştir
+                    try:
+                        supabase.table("form_sorulari").update({"soru_metni": m_soru['soru_metni']}).eq("id", ustteki_soru['id']).execute()
+                        supabase.table("form_sorulari").update({"soru_metni": ustteki_soru['soru_metni']}).eq("id", m_soru['id']).execute()
+                        st.toast("Soru sırası değiştirildi.")
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Sıralama değiştirilirken hata oluştu: {ex}")
 
                 if c_s4.button("🗑️ Sil", key=f"soru_sil_{m_soru['id']}"):
                     supabase.table("form_sorulari").delete().eq("id", m_soru['id']).execute()
