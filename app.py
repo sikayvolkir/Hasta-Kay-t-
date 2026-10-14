@@ -233,8 +233,8 @@ def show_input_canvas_popup(field_key):
             stroke_width=c_width,
             stroke_color=c_color,
             background_color="#ffffff",
-            height=420,  # Genişletilmiş büyük alan
-            width=620,   # Genişletilmiş büyük alan
+            height=420,
+            width=620,
             drawing_mode="freedraw",
             initial_drawing=initial_drawing,
             key=f"canvas_obj_{field_key}"
@@ -268,7 +268,6 @@ def show_input_canvas_popup(field_key):
 
         if has_content:
             try:
-                # Arka planda RuntimeError fırlatmaması için güvenli dönüştürme
                 img_data_arr = getattr(canvas_result, "image_data", None)
                 if img_data_arr is not None:
                     img_pil = Image.fromarray(img_data_arr.astype('uint8'), 'RGBA')
@@ -687,22 +686,7 @@ elif st.session_state.sayfa == "hasta_detay":
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
 
-                    # DÜZENLEME BUTONU VE ALANI
-                    if st.button("✏️ Notu / İçeriği Düzenle", key=f"btn_duz_{islem['id']}"):
-                        st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
-
-                    if st.session_state.get(f"aktif_duzenleme_{islem['id']}", False):
-                        yeni_duzenlenen_not = st.text_area("Notu Güncelle", value=genel_not_goster, key=f"txt_duz_{islem['id']}")
-                        c_db1, c_db2 = st.columns(2)
-                        if c_db1.button("💾 Güncellemeyi Kaydet", key=f"btn_kaydet_duz_{islem['id']}", use_container_width=True, type="primary"):
-                            supabase.table("islemler").update({"hekim_notu": yeni_duzenlenen_not}).eq("id", islem['id']).execute()
-                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
-                            st.success("Not başarıyla güncellendi!")
-                            st.rerun()
-                        if c_db2.button("✖️ İptal", key=f"btn_iptal_duz_{islem['id']}", use_container_width=True):
-                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
-                            st.rerun()
-
+                    # FORMU, ÇİZİMLERİ VE RESİMLERİ GÖSTERME / DÜZENLEME BÖLÜMÜ
                     if form_cevaplari_data:
                         st.markdown("---")
                         st.markdown("### 📋 Değerlendirme Formu Yanıtları")
@@ -714,10 +698,38 @@ elif st.session_state.sayfa == "hasta_detay":
                         urls = [u.strip() for u in foto_raw.split(",") if u.strip()]
                         if urls:
                             st.markdown("---")
-                            st.markdown("### 📸 Yüklenen Görseller / Röntgenler ve Çizimler")
+                            st.markdown("### 📸 Yüklenen Görseller, Röntgenler ve Çizimler")
                             img_cols = st.columns(min(len(urls), 3))
                             for idx, u in enumerate(urls):
                                 with img_cols[idx % 3]: st.image(u, use_container_width=True)
+
+                    st.markdown("---")
+                    # DÜZENLEME BUTONU VE GÜNCELLEME ALANI
+                    if st.button("✏️ Notu / İçeriği ve Formu Düzenle", key=f"btn_duz_{islem['id']}"):
+                        st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
+
+                    if st.session_state.get(f"aktif_duzenleme_{islem['id']}", False):
+                        st.markdown("#### ⚙️ Düzenleme Paneli")
+                        yeni_duzenlenen_not = st.text_area("Notu Güncelle", value=genel_not_goster, key=f"txt_duz_{islem['id']}")
+                        
+                        yeni_duzenlenen_form = {}
+                        if form_cevaplari_data:
+                            st.markdown("**Form Yanıtlarını Güncelle:**")
+                            for soru, cevap in form_cevaplari_data.items():
+                                yeni_duzenlenen_form[soru] = st.text_input(soru, value=cevap, key=f"form_duz_{islem['id']}_{soru}")
+                        else:
+                            yeni_duzenlenen_form = form_cevaplari_data
+
+                        c_db1, c_db2 = st.columns(2)
+                        if c_db1.button("💾 Güncellemeyi Kaydet", key=f"btn_kaydet_duz_{islem['id']}", use_container_width=True, type="primary"):
+                            yeni_birlesik_not = f"[Muayene Notu]: {yeni_duzenlenen_not}\n[Diş Planı]: {json.dumps(dis_plani_data, ensure_ascii=False)}\n[Form Cevapları]: {json.dumps(yeni_duzenlenen_form, ensure_ascii=False)}"
+                            supabase.table("islemler").update({"hekim_notu": yeni_birlesik_not}).eq("id", islem['id']).execute()
+                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
+                            st.success("Kayıt başarıyla güncellendi!")
+                            st.rerun()
+                        if c_db2.button("✖️ İptal", key=f"btn_iptal_duz_{islem['id']}", use_container_width=True):
+                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
+                            st.rerun()
 
                     st.markdown("---")
                     if st.button("🗑️ Bu Kaydı Sil", key=f"sil_isl_{islem['id']}"):
