@@ -4,7 +4,6 @@ import pandas as pd
 import io
 import json
 from supabase import create_client, Client
-from streamlit_drawable_canvas import st_canvas
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -31,9 +30,6 @@ except Exception as e:
 if "user" not in st.session_state: st.session_state.user = None
 if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
 if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
-if "gecici_fotolar" not in st.session_state: st.session_state.gecici_fotolar = []
-if "duzenlenen_islem_id" not in st.session_state: st.session_state.duzenlenen_islem_id = None
-if "hasta_duzenleme_modu" not in st.session_state: st.session_state.hasta_duzenleme_modu = False
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
 if "yeni_muayene_form_cevaplari" not in st.session_state: st.session_state.yeni_muayene_form_cevaplari = {}
@@ -83,7 +79,6 @@ def logout():
     st.session_state.user = None
     st.session_state.sayfa = "hasta_listesi"
     st.session_state.secili_hasta_id = None
-    st.session_state.hasta_duzenleme_modu = False
     st.rerun()
 
 # --- LOGIN & REGISTER SCREEN ---
@@ -123,29 +118,24 @@ st.sidebar.caption(f"👤 {user_email}")
 with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
     if st.button("📋 Hasta Listesi & Arama", use_container_width=True):
         st.session_state.sayfa = "hasta_listesi"
-        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("👤 Yeni Hasta Kaydı", use_container_width=True):
         st.session_state.sayfa = "yeni_hasta"
-        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("🦷 Yeni Muayene", use_container_width=True):
         st.session_state.sayfa = "yeni_muayene"
-        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("💉 Yeni İşlem", use_container_width=True):
         st.session_state.sayfa = "yeni_islem"
-        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("⚙️ Ayarlar", use_container_width=True):
         st.session_state.sayfa = "ayarlar"
-        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True): logout()
 
-# --- ANATOMİK DİŞ DİYAGRAMI (SİMETRİK / DOĞRU YÖNELİMLİ) ---
+# --- ANATOMİK DİŞ DİYAGRAMI ---
 def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True):
     border_color = "#334155"
     d_str = str(dis_no)
@@ -200,39 +190,10 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- SADELEŞTİRİLMİŞ ÇİZİM VE METİN POPUP EKRANI ---
-@st.dialog("✏️ Metin / Çizim Alanı", width="medium")
+# --- METİN VE NOT GİRİŞ POPUP EKRANI ---
+@st.dialog("✏️ Metin / Not Düzenleme", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
-    # Sol üstteki kayar düğme (Toggle)
-    mod_cizim = st.toggle("Mouse ile Çizim / Tuval Modu", value=False, key=f"tgl_{field_key}")
-
-    yazilan_deger = st.text_input("Metin Girişi", value=current_text, key=f"txt_popup_{field_key}")
-
-    if mod_cizim:
-        st.markdown("---")
-        # Sağda ikonik minimalist kontroller
-        rc1, rc2, rc3 = st.columns([1, 1, 1])
-        with rc1:
-            kalinlik = st.popover("⚫", use_container_width=True)
-            stroke_width = kalinlik.slider("Kalınlık", 1, 15, 3, key=f"sw_{field_key}")
-        with rc2:
-            renk_sec = st.color_picker("", "#000000", label_visibility="collapsed", key=f"cp_{field_key}")
-        with rc3:
-            silgi_aktif = st.checkbox("🧹 Silgi", key=f"slg_{field_key}")
-            aktif_renk = "#ffffff" if silgi_aktif else renk_sec
-
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 165, 0, 0.3)",
-            stroke_width=stroke_width,
-            stroke_color=aktif_renk,
-            background_color="#ffffff",
-            height=250,
-            width=500,
-            drawing_mode="freedraw",
-            key=f"canvas_{field_key}"
-        )
-        if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
-            yazilan_deger += " [Çizim Tuval İçeriği Mevcut]"
+    yazilan_deger = st.text_area("Açıklama / Not", value=current_text, height=180, key=f"txt_popup_{field_key}")
 
     col_btn1, col_btn2 = st.columns(2)
     if col_btn1.button("💾 Kaydet", use_container_width=True, type="primary"):
