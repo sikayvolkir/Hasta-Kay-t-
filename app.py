@@ -178,7 +178,7 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
         <defs><linearGradient id="rg_{dis_no}_{int(is_upper)}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fecaca"/><stop offset="100%" stop-color="#ffffff"/></linearGradient></defs>
     </svg>'''
 
-@st.dialog("🦷 Ağız ve Diş Tedavi Planı Şeması", width="large")
+@st.dialog("🦷 Ağız dan Diş Tedavi Planı Şeması", width="large")
 def show_tooth_diagram_popup(dis_veri_dict=None):
     if dis_veri_dict is None: dis_veri_dict = st.session_state.dis_islemleri_gecici
     st.markdown("<div style='background-color: #475569; padding: 8px 15px; border-radius: 6px; color: white; font-weight: bold; font-size: 13px; margin-bottom: 10px; display:flex; justify-content:space-between;'><span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span></div>", unsafe_allow_html=True)
@@ -222,7 +222,6 @@ def show_input_canvas_popup(field_key):
         c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
         c_width = st.session_state[f"sw_{field_key}"]
 
-        # Kaydedilmiş bir çizim varsa arka plan veya ilk veri olarak yükleyebiliriz
         initial_drawing = st.session_state.get(f"canvas_data_{field_key}", None)
 
         canvas_result = st_canvas(
@@ -261,13 +260,11 @@ def show_input_canvas_popup(field_key):
     c_b1, c_b2 = st.columns(2)
     if c_b1.button("💾 Kaydet ve Kapat", use_container_width=True, type="primary"):
         if canvas_result.image_data is not None:
-            # Çizimi PNG görseline çevirip kaydedelim
             img_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
             buffered = io.BytesIO()
             img_pil.save(buffered, format="PNG")
             img_bytes = buffered.getvalue()
             
-            # Supabase storage veya doğrudan session içine görsel verisi olarak kaydedelim
             dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
             try:
                 supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
@@ -276,7 +273,6 @@ def show_input_canvas_popup(field_key):
             except Exception:
                 pass
             
-            # Canvas nesne json verisini de saklayalım ki tekrar açıldığında düzenlenebilsin
             st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
 
         st.success("Çizim görsel olarak kaydedildi!")
@@ -287,7 +283,6 @@ def show_input_canvas_popup(field_key):
         st.session_state[f"canvas_data_{field_key}"] = None
         st.rerun()
 
-# Pillow modülü için import kontrolü
 try:
     from PIL import Image
 except ImportError:
@@ -327,7 +322,6 @@ def show_evaluation_form_popup(hasta_id):
             if col_s2.button("✏️", key=f"btn_form_canvas_{f_key}", help="El Yazısı / Çizim Ekle", use_container_width=True):
                 show_input_canvas_popup(f_key)
 
-            # Eğer bu soru için çizim yapılmışsa altında gösterelim
             img_goster = st.session_state.get(f"saved_img_{f_key}", "")
             if img_goster:
                 st.image(img_goster, width=200, caption="Eklenen Çizim")
@@ -527,7 +521,6 @@ elif st.session_state.sayfa == "yeni_muayene":
     if c_n2.button("✏️ Çizim Ekle", key=f"btn_popup_{genel_not_key}", use_container_width=True):
         show_input_canvas_popup(genel_not_key)
 
-    # Genel not çizim görseli varsa metnin altında gösterelim
     genel_cizim_url = st.session_state.get(f"saved_img_{genel_not_key}", "")
     if genel_cizim_url:
         st.image(genel_cizim_url, caption="Eklenen El Yazısı / Çizim Görseli", width=300)
@@ -546,7 +539,6 @@ elif st.session_state.sayfa == "yeni_muayene":
                         supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.getvalue())
                         foto_url_listesi.append(supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi))
                 
-                # Eğer genel not için çizim yapıldıysa onu da fotoğraflara ekleyelim
                 if genel_cizim_url:
                     foto_url_listesi.append(genel_cizim_url)
 
@@ -740,7 +732,7 @@ elif st.session_state.sayfa == "ayarlar":
             col1.write(t['tur_adi'])
             if col2.button("Sil", key=f"t_sil_{t['id']}"):
                 supabase.table("islem_turleri").delete().eq("id", t['id']).execute()
-                st.rerup()
+                st.rerun()
 
     with tab_form_soru:
         st.subheader("Değerlendirme Formu Soruları")
@@ -788,8 +780,10 @@ elif st.session_state.sayfa == "ayarlar":
             yeni_sifre_2 = st.text_input("Yeni Şifre (Tekrar)", type="password")
             
             if st.form_submit_button("Şifreyi Güncelle", use_container_width=True):
-                if not eski_sifre or not yeni_sil_1 := yeni_sifre_1 != yeni_sifre_2:
-                    st.warning("Lütfen tüm alanları doldurun ve şifrelerin eşleştiğinden emin olun.")
+                if not eski_sifre or not yeni_sifre_1 or not yeni_sifre_2:
+                    st.warning("Lütfen tüm alanları doldurun.")
+                elif yeni_sifre_1 != yeni_sifre_2:
+                    st.error("Yeni şifreler birbiriyle uyuşmuyor.")
                 else:
                     try:
                         supabase.auth.sign_in_with_password({"email": user_email, "password": eski_sifre})
