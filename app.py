@@ -14,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Menüye basıldığında sol paneli otomatik kapatan JavaScript enjeksiyonu
 def close_sidebar_js():
     st.components.v1.html(
         """
@@ -210,9 +209,9 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- ÇİZİM / EL YAZISI POP-UP PENCERESİ ---
+# --- ÇİZİM / EL YAZISI POP-UP PENCERESİ (GÖRSEL VE SİLGİ DESTEKLİ) ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
-def show_input_canvas_popup(field_key, current_text=""):
+def show_input_canvas_popup(field_key):
     c_sol, c_sag = st.columns([4, 1])
     
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
@@ -223,6 +222,9 @@ def show_input_canvas_popup(field_key, current_text=""):
         c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
         c_width = st.session_state[f"sw_{field_key}"]
 
+        # Kaydedilmiş bir çizim varsa arka plan veya ilk veri olarak yükleyebiliriz
+        initial_drawing = st.session_state.get(f"canvas_data_{field_key}", None)
+
         canvas_result = st_canvas(
             fill_color="rgba(255, 165, 0, 0.3)",
             stroke_width=c_width,
@@ -231,7 +233,8 @@ def show_input_canvas_popup(field_key, current_text=""):
             height=300,
             width=420,
             drawing_mode="freedraw",
-            key=f"canvas_{field_key}"
+            initial_drawing=initial_drawing,
+            key=f"canvas_obj_{field_key}"
         )
 
     with c_sag:
@@ -257,18 +260,43 @@ def show_input_canvas_popup(field_key, current_text=""):
     st.markdown("---")
     c_b1, c_b2 = st.columns(2)
     if c_b1.button("💾 Kaydet ve Kapat", use_container_width=True, type="primary"):
-        st.session_state[f"saved_val_{field_key}"] = "[El Yazısı / Çizim İçeriği Kaydedildi]"
-        st.success("Çiziminiz kaydedildi!")
+        if canvas_result.image_data is not None:
+            # Çizimi PNG görseline çevirip kaydedelim
+            img_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+            buffered = io.BytesIO()
+            img_pil.save(buffered, format="PNG")
+            img_bytes = buffered.getvalue()
+            
+            # Supabase storage veya doğrudan session içine görsel verisi olarak kaydedelim
+            dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
+            try:
+                supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
+                img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
+                st.session_state[f"saved_img_{field_key}"] = img_url
+            except Exception:
+                pass
+            
+            # Canvas nesne json verisini de saklayalım ki tekrar açıldığında düzenlenebilsin
+            st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
+
+        st.success("Çizim görsel olarak kaydedildi!")
         st.rerun()
 
     if c_b2.button("🗑️ Temizle", use_container_width=True):
-        st.session_state[f"saved_val_{field_key}"] = ""
+        st.session_state[f"saved_img_{field_key}"] = ""
+        st.session_state[f"canvas_data_{field_key}"] = None
         st.rerun()
 
-# --- HASTA DEĞERLENDİRME FORMU POP-UP (Gerçek Modal Dialog) ---
+# Pillow modülü için import kontrolü
+try:
+    from PIL import Image
+except ImportError:
+    pass
+
+# --- HASTA DEĞERLENDİRME FORMU POP-UP ---
 @st.dialog("📋 Hasta Değerlendirme Formu", width="large")
 def show_evaluation_form_popup(hasta_id):
-    st.markdown("Soruları aşağı kaydırarak sırayla yanıtlayabilir, yanlarındaki kalem simgesiyle el yazısı veya çizim ekleyebilirsiniz.")
+    st.markdown("Soruları aşağı kaydırarak sırayla yanıtlayabilir, yanlarındaki kalem simgesiyle çizim ekleyebilirsiniz.")
     
     try:
         sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -290,14 +318,19 @@ def show_evaluation_form_popup(hasta_id):
             s_metin = s["soru_metni"]
             f_key = f"form_f_{hasta_id}_{s_id}"
             
-            def_val = form_cevaplari.get(s_metin, st.session_state.get(f"saved_val_{f_key}", ""))
+            def_val = form_cevaplari.get(s_metin, "")
             
             col_s1, col_s2 = st.columns([5, 1])
             cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
             form_cevaplari[s_metin] = cevap
             
             if col_s2.button("✏️", key=f"btn_form_canvas_{f_key}", help="El Yazısı / Çizim Ekle", use_container_width=True):
-                show_input_canvas_popup(f_key, cevap)
+                show_input_canvas_popup(f_key)
+
+            # Eğer bu soru için çizim yapılmışsa altında gösterelim
+            img_goster = st.session_state.get(f"saved_img_{f_key}", "")
+            if img_goster:
+                st.image(img_goster, width=200, caption="Eklenen Çizim")
 
     st.markdown("---")
     if st.button("💾 Formu Kaydet ve Kapat", use_container_width=True, type="primary"):
@@ -470,7 +503,7 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU VE BUTONU (GÜNCELLENEN KISIM)
+    # HASTA DEĞERLENDİRME FORMU VE BUTONU
     col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
@@ -482,7 +515,6 @@ elif st.session_state.sayfa == "yeni_muayene":
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
 
-    # Pop-up pencere tetikleyicisi
     if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
         show_evaluation_form_popup(hedef_hasta_id)
 
@@ -490,14 +522,17 @@ elif st.session_state.sayfa == "yeni_muayene":
     st.subheader("📝 Genel Notlar ve Görseller")
     
     genel_not_key = "muayene_genel_not_field"
-    default_genel_not = st.session_state.get(f"saved_val_{genel_not_key}", "")
-    
     c_n1, c_n2 = st.columns([5, 1])
-    muayene_genel_not = c_n1.text_area("Muayene Notu / Açıklama", value=default_genel_not, key=genel_not_key)
-    if c_n2.button("✏️", key=f"btn_popup_{genel_not_key}", use_container_width=True):
-        show_input_canvas_popup(genel_not_key, muayene_genel_not)
+    muayene_genel_not = c_n1.text_area("Muayene Notu / Açıklama", key=genel_not_key)
+    if c_n2.button("✏️ Çizim Ekle", key=f"btn_popup_{genel_not_key}", use_container_width=True):
+        show_input_canvas_popup(genel_not_key)
 
-    muayene_fotolar = st.file_uploader("Görsel Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    # Genel not çizim görseli varsa metnin altında gösterelim
+    genel_cizim_url = st.session_state.get(f"saved_img_{genel_not_key}", "")
+    if genel_cizim_url:
+        st.image(genel_cizim_url, caption="Eklenen El Yazısı / Çizim Görseli", width=300)
+
+    muayene_fotolar = st.file_uploader("Görsel / Röntgen Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if st.button("💾 Planı/Muayeneyi Kaydet", use_container_width=True, type="primary"):
         if not hedef_hasta_id:
@@ -510,6 +545,10 @@ elif st.session_state.sayfa == "yeni_muayene":
                         dosya_adi = f"muayene_{int(datetime.datetime.now().timestamp())}_{user_id[:4]}.png"
                         supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.getvalue())
                         foto_url_listesi.append(supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi))
+                
+                # Eğer genel not için çizim yapıldıysa onu da fotoğraflara ekleyelim
+                if genel_cizim_url:
+                    foto_url_listesi.append(genel_cizim_url)
 
                 form_data_to_save = st.session_state.get(f"form_data_{hedef_hasta_id}", {})
 
@@ -646,18 +685,6 @@ elif st.session_state.sayfa == "hasta_detay":
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
 
-                    # Not Düzenleme
-                    if st.button("✏️ Notu Düzenle", key=f"btn_duz_{islem['id']}"):
-                        st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
-
-                    if st.session_state.get(f"aktif_duzenleme_{islem['id']}", False):
-                        yeni_duzenlenen_not = st.text_area("Notu Güncelle", value=genel_not_goster, key=f"txt_duz_{islem['id']}")
-                        if st.button("💾 Güncellemeyi Kaydet", key=f"btn_kaydet_duz_{islem['id']}"):
-                            supabase.table("islemler").update({"hekim_notu": yeni_duzenlenen_not}).eq("id", islem['id']).execute()
-                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
-                            st.success("Not güncellendi!")
-                            st.rerun()
-
                     if form_cevaplari_data:
                         st.markdown("---")
                         st.markdown("### 📋 Değerlendirme Formu Yanıtları")
@@ -669,7 +696,7 @@ elif st.session_state.sayfa == "hasta_detay":
                         urls = [u.strip() for u in foto_raw.split(",") if u.strip()]
                         if urls:
                             st.markdown("---")
-                            st.markdown("### 📸 Yüklenen Görseller / Röntgenler")
+                            st.markdown("### 📸 Yüklenen Görseller / Röntgenler ve Çizimler")
                             img_cols = st.columns(min(len(urls), 3))
                             for idx, u in enumerate(urls):
                                 with img_cols[idx % 3]: st.image(u, use_container_width=True)
@@ -713,7 +740,7 @@ elif st.session_state.sayfa == "ayarlar":
             col1.write(t['tur_adi'])
             if col2.button("Sil", key=f"t_sil_{t['id']}"):
                 supabase.table("islem_turleri").delete().eq("id", t['id']).execute()
-                st.rerun()
+                st.rerup()
 
     with tab_form_soru:
         st.subheader("Değerlendirme Formu Soruları")
@@ -761,17 +788,15 @@ elif st.session_state.sayfa == "ayarlar":
             yeni_sifre_2 = st.text_input("Yeni Şifre (Tekrar)", type="password")
             
             if st.form_submit_button("Şifreyi Güncelle", use_container_width=True):
-                if not eski_sifre or not yeni_sifre_1 or not yeni_sifre_2:
-                    st.warning("Lütfen tüm alanları doldurun.")
-                elif yeni_sifre_1 != yeni_sifre_2:
-                    st.error("Yeni şifreler birbiriyle uyuşmuyor.")
+                if not eski_sifre or not yeni_sil_1 := yeni_sifre_1 != yeni_sifre_2:
+                    st.warning("Lütfen tüm alanları doldurun ve şifrelerin eşleştiğinden emin olun.")
                 else:
                     try:
                         supabase.auth.sign_in_with_password({"email": user_email, "password": eski_sifre})
                         supabase.auth.update_user({"password": yeni_sifre_1})
                         st.success("✅ Şifreniz başarıyla değiştirildi!")
                     except Exception as err:
-                        st.error(f"Şifre değiştirilemedi. Eski şifrenizi yanlış girmiş olabilirsiniz: {err}")
+                        st.error(f"Şifre değiştirilemedi: {err}")
 
 # ==============================================================================
 # --- SAYFA 7: HAKKINDA SAYFASI ---
