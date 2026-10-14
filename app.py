@@ -105,7 +105,7 @@ if not st.session_state.user:
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION (Tıklayınca Paneli Kapatan Mekanizma) ---
+# --- SIDEBAR NAVIGATION (Tıklayınca Paneli Otomatik Kapatan Mekanizma) ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
@@ -186,10 +186,9 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
 # --- CANVAS / ÇİZİM POP-UP EKRANI (Sağda 3 İkonik Tuş, Kalınlık, Renk ve Silgi) ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
-    c_ Sol, c_Sag = st.columns([4, 1])
+    c_sol, c_sag = st.columns([4, 1])
     
-    with c_Sol:
-        # Session state ile ayarları tutalım
+    with c_sol:
         if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
         if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
         if f"mode_{field_key}" not in st.session_state: st.session_state[f"mode_{field_key}"] = "freedraw"
@@ -205,17 +204,17 @@ def show_input_canvas_popup(field_key, current_text=""):
             key=f"canvas_{field_key}"
         )
 
-    with c_Sag:
+    with c_sag:
         st.markdown("<div style='text-align:center; font-weight:bold; margin-bottom:10px;'>Araçlar</div>", unsafe_allow_html=True)
         
-        # 1. Kalınlık Simge Butonu ve Pop-up Ayarı
+        # 1. Kalınlık Simge Butonu
         kalinlik_pop = st.popover("⚫ Kalınlık", use_container_width=True)
         yeni_kalinlik = kalinlik_pop.slider("Çizgi Kalınlığı", 1, 20, st.session_state[f"sw_{field_key}"])
         if yeni_kalinlik != st.session_state[f"sw_{field_key}"]:
             st.session_state[f"sw_{field_key}"] = yeni_kalinlik
             st.rerun()
 
-        # 2. Renk Simge Butonu ve Pop-up Skalası
+        # 2. Renk Simge Butonu
         renk_pop = st.popover("🎨 Renk", use_container_width=True)
         yeni_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
         if yeni_renk != st.session_state[f"cp_{field_key}"]:
@@ -257,7 +256,6 @@ def show_evaluation_form_popup(hasta_id, islem_id=None):
 
     form_cevaplari = {}
     
-    # Kaydırılabilir alan sarmalayıcısı
     with st.container(height=400):
         for s in sorular_res:
             s_id = s["id"]
@@ -292,7 +290,7 @@ if st.session_state.sayfa == "hasta_listesi":
         if arama_metni.strip():
             query = query.ilike("ad_soyad", f"%{arama_metni.strip()}%")
         hastalar = query.execute().data
-    except Exception as e:
+    except Exception:
         hastalar = []
 
     if not hastalar:
@@ -460,7 +458,7 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     muayene_fotolar = st.file_uploader("Görsel Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
-    if st.button("💾 Planı ve Muayeneyi Kaydet", use_container_width=True, type="primary"):
+    if st.button("💾 Planı/Muayeneyi Kaydet", use_container_width=True, type="primary"):
         if not hedef_hasta_id:
             st.warning("Lütfen geçerli bir hasta seçin.")
         else:
@@ -484,7 +482,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                 }
 
                 supabase.table("islemler").insert(muayene_veri).execute()
-                st.toast("✅ Muayene başarıyla kaydedildi!")
+                st.toast("✅ Muayene kaydedildi!")
                 st.session_state.dis_islemleri_gecici = {}
                 st.session_state.secili_hasta_id = hedef_hasta_id
                 st.session_state.sayfa = "hasta_detay"
@@ -493,7 +491,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.error(f"Hata: {ex}")
 
 # ==============================================================================
-# --- SAYFA 4: YENİ İŞLEM SAYFASI (Görsel Eklemeli) ---
+# --- SAYFA 4: YENİ İŞLEM SAYFASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_islem":
     st.title("💉 Yeni İşlem")
@@ -537,11 +535,10 @@ elif st.session_state.sayfa == "yeni_islem":
             st.rerun()
 
 # ==============================================================================
-# --- SAYFA 5: HASTA DETAY & İŞLEM GEÇMİŞİ (Geri Tuşu & Düzenleme Özellikli) ---
+# --- SAYFA 5: HASTA DETAY & İŞLEM GEÇMİŞİ ---
 # ==============================================================================
 elif st.session_state.sayfa == "hasta_detay":
-    # Geri Dön Tuşu
-    if st.button("⬅️ Hasta Listesine Geri Dön"):
+    if st.button("⬅️ Geri Dön (Hasta Listesi)"):
         st.session_state.sayfa = "hasta_listesi"
         st.rerun()
 
@@ -608,8 +605,7 @@ elif st.session_state.sayfa == "hasta_detay":
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
 
-                    # Muayene veya Not Düzenleme Alanı
-                    duzenleme_key = f"duzenle_not_{islem['id']}"
+                    # Not Düzenleme
                     if st.button("✏️ Notu Düzenle", key=f"btn_duz_{islem['id']}"):
                         st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
 
