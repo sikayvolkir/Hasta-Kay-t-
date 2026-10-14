@@ -53,6 +53,7 @@ if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id =
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
 if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
+if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
 
 # İşlem Bazlı Renkler
 if "islem_renkleri" not in st.session_state:
@@ -144,6 +145,7 @@ with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
         yonlendir("yeni_hasta")
         st.rerun()
     if st.button("🦷 Yeni Muayene", use_container_width=True, key="nav_ym"): 
+        st.session_state.duzenlenen_muayene_id = None
         yonlendir("yeni_muayene")
         st.rerun()
     if st.button("💉 Yeni İşlem", use_container_width=True, key="nav_yi"): 
@@ -214,7 +216,7 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- POP-UP ÇİZİM / EL YAZISI DİALOG PENCERESİ (BÜYÜK & HATA KORUMALI) ---
+# --- POP-UP ÇİZİM / EL YAZISI DİALOG PENCERESİ ---
 @st.dialog("✏️ El Yazısı / Çizim Ekranı", width="large")
 def show_input_canvas_popup(field_key):
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
@@ -411,10 +413,11 @@ elif st.session_state.sayfa == "yeni_hasta":
                 st.rerun()
 
 # ==============================================================================
-# --- SAYFA 3: YENİ MUAYENE VE DİŞ DİYAGRAMI ---
+# --- SAYFA 3: YENİ MUAYENE / DÜZENLEME VE DİŞ DİYAGRAMI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_muayene":
-    st.title("🦷 Diş Tedavi Planlama")
+    is_edit_mode = st.session_state.duzenlenen_muayene_id is not None
+    st.title("✏️ Muayene Düzenleme" if is_edit_mode else "🦷 Diş Tedavi Planlama")
 
     try:
         hastalar_res = supabase.table("hastalar").select("id, ad_soyad, telefon").eq("kullanici_id", user_id).order("ad_soyad").execute().data
@@ -422,7 +425,16 @@ elif st.session_state.sayfa == "yeni_muayene":
         hastalar_res = []
 
     hasta_secenekleri = ["+ Yeni Hasta Ekle"] + [f"{h['ad_soyad']} ({h['telefon']})" for h in hastalar_res]
-    secilen_hasta_secim = st.selectbox("Hasta Seçin veya Yeni Oluşturun *", hasta_secenekleri)
+    
+    # Eğer düzenleme modundaysak, hastayı otomatik seçelim
+    def_hasta_index = 0
+    if st.session_state.secili_hasta_id:
+        for idx, h in enumerate(hastalar_res):
+            if h['id'] == st.session_state.secili_hasta_id:
+                def_hasta_index = idx + 1
+                break
+
+    secilen_hasta_secim = st.selectbox("Hasta Seçin veya Yeni Oluşturun *", hasta_secenekleri, index=def_hasta_index)
 
     hedef_hasta_id = None
     if secilen_hasta_secim == "+ Yeni Hasta Ekle":
@@ -522,7 +534,9 @@ elif st.session_state.sayfa == "yeni_muayene":
     
     genel_not_key = "muayene_genel_not_field"
     col_g1, col_g2 = st.columns([5, 1])
-    muayene_genel_not = col_g1.text_area("Muayene Notu / Açıklama", key=genel_not_key)
+    
+    varsayilan_not_val = st.session_state.get("gecici_muayene_notu", "")
+    muayene_genel_not = col_g1.text_area("Muayene Notu / Açıklama", value=varsayilan_not_val, key=genel_not_key)
     
     if col_g2.button("✏️ Çizim Ekle", key=f"btn_pop_draw_{genel_not_key}", use_container_width=True):
         st.session_state[f"aktif_canvas_modal_{genel_not_key}"] = True
@@ -541,14 +555,14 @@ elif st.session_state.sayfa == "yeni_muayene":
             st.warning("Lütfen geçerli bir hasta seçin.")
         else:
             try:
-                foto_url_listesi = []
+                foto_url_listesi = st.session_state.get("gecici_fotograflar", [])
                 if muayene_fotolar:
                     for foto in muayene_fotolar:
                         dosya_adi = f"muayene_{int(datetime.datetime.now().timestamp())}_{user_id[:4]}.png"
                         supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.getvalue())
                         foto_url_listesi.append(supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi))
                 
-                if genel_cizim_url:
+                if genel_cizim_url and genel_cizim_url not in foto_url_listesi:
                     foto_url_listesi.append(genel_cizim_url)
 
                 form_data_to_save = st.session_state.get(f"form_data_{hedef_hasta_id}", {})
@@ -562,9 +576,18 @@ elif st.session_state.sayfa == "yeni_muayene":
                     "fotograf_url": ",".join(foto_url_listesi) if foto_url_listesi else None
                 }
 
-                supabase.table("islemler").insert(muayene_veri).execute()
-                st.toast("✅ Muayene kaydedildi!")
+                if is_edit_mode:
+                    supabase.table("islemler").update(muayene_veri).eq("id", st.session_state.duzenlenen_muayene_id).execute()
+                    st.toast("✅ Muayene güncellemesi kaydedildi!")
+                else:
+                    supabase.table("islemler").insert(muayene_veri).execute()
+                    st.toast("✅ Muayene başarıyla kaydedildi!")
+
+                # Temizlik ve Detay Sayfasına Yönlendirme
                 st.session_state.dis_islemleri_gecici = {}
+                st.session_state.gecici_muayene_notu = ""
+                st.session_state.gecici_fotograflar = []
+                st.session_state.duzenlenen_muayene_id = None
                 st.session_state.secili_hasta_id = hedef_hasta_id
                 st.session_state.sayfa = "hasta_detay"
                 st.rerun()
@@ -686,7 +709,6 @@ elif st.session_state.sayfa == "hasta_detay":
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
 
-                    # FORMU, ÇİZİMLERİ VE RESİMLERİ GÖSTERME / DÜZENLEME BÖLÜMÜ
                     if form_cevaplari_data:
                         st.markdown("---")
                         st.markdown("### 📋 Değerlendirme Formu Yanıtları")
@@ -694,6 +716,7 @@ elif st.session_state.sayfa == "hasta_detay":
                             st.write(f"- **{soru}:** {cevap if cevap else '-'}")
 
                     foto_raw = islem.get("fotograf_url")
+                    urls = []
                     if foto_raw:
                         urls = [u.strip() for u in foto_raw.split(",") if u.strip()]
                         if urls:
@@ -704,32 +727,16 @@ elif st.session_state.sayfa == "hasta_detay":
                                 with img_cols[idx % 3]: st.image(u, use_container_width=True)
 
                     st.markdown("---")
-                    # DÜZENLEME BUTONU VE GÜNCELLEME ALANI
-                    if st.button("✏️ Notu / İçeriği ve Formu Düzenle", key=f"btn_duz_{islem['id']}"):
-                        st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
-
-                    if st.session_state.get(f"aktif_duzenleme_{islem['id']}", False):
-                        st.markdown("#### ⚙️ Düzenleme Paneli")
-                        yeni_duzenlenen_not = st.text_area("Notu Güncelle", value=genel_not_goster, key=f"txt_duz_{islem['id']}")
-                        
-                        yeni_duzenlenen_form = {}
-                        if form_cevaplari_data:
-                            st.markdown("**Form Yanıtlarını Güncelle:**")
-                            for soru, cevap in form_cevaplari_data.items():
-                                yeni_duzenlenen_form[soru] = st.text_input(soru, value=cevap, key=f"form_duz_{islem['id']}_{soru}")
-                        else:
-                            yeni_duzenlenen_form = form_cevaplari_data
-
-                        c_db1, c_db2 = st.columns(2)
-                        if c_db1.button("💾 Güncellemeyi Kaydet", key=f"btn_kaydet_duz_{islem['id']}", use_container_width=True, type="primary"):
-                            yeni_birlesik_not = f"[Muayene Notu]: {yeni_duzenlenen_not}\n[Diş Planı]: {json.dumps(dis_plani_data, ensure_ascii=False)}\n[Form Cevapları]: {json.dumps(yeni_duzenlenen_form, ensure_ascii=False)}"
-                            supabase.table("islemler").update({"hekim_notu": yeni_birlesik_not}).eq("id", islem['id']).execute()
-                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
-                            st.success("Kayıt başarıyla güncellendi!")
-                            st.rerun()
-                        if c_db2.button("✖️ İptal", key=f"btn_iptal_duz_{islem['id']}", use_container_width=True):
-                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
-                            st.rerun()
+                    
+                    # MUAYENEYİ YENİ MUAYENE SAYFASINDA DÜZENLEMEK İÇİN YÖNLENDİRME BUTONU
+                    if st.button("✏️ Bu Muayeneyi Düzenle (Muayene Sayfasında Aç)", key=f"btn_duz_sayfa_{islem['id']}", type="primary"):
+                        st.session_state.duzenlenen_muayene_id = islem['id']
+                        st.session_state.dis_islemleri_gecici = dis_plani_data
+                        st.session_state[f"form_data_{hasta_id}"] = form_cevaplari_data
+                        st.session_state.gecici_muayene_notu = genel_not_goster
+                        st.session_state.gecici_fotograflar = urls
+                        st.session_state.sayfa = "yeni_muayene"
+                        st.rerun()
 
                     st.markdown("---")
                     if st.button("🗑️ Bu Kaydı Sil", key=f"sil_isl_{islem['id']}"):
