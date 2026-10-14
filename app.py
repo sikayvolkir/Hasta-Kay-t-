@@ -14,13 +14,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.markdown("""
-    <style>
-        [data-testid="stSidebar"] {
-            transition: all 0.3s ease-in-out;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# Menüye basıldığında sol paneli otomatik kapatan JavaScript enjeksiyonu
+def close_sidebar_js():
+    st.components.v1.html(
+        """
+        <script>
+            var sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+            var closeBtn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+            if (closeBtn && sidebar) {
+                closeBtn.click();
+            }
+        </script>
+        """,
+        height=0,
+    )
 
 # --- SUPABASE CONNECTION ---
 @st.cache_resource
@@ -119,18 +126,35 @@ st.sidebar.caption(f"👤 {user_email}")
 
 def yonlendir(sayfa_adi):
     st.session_state.sayfa = sayfa_adi
-    st.rerun()
+    st.session_state.close_sidebar_flag = True
+
+if st.session_state.get("close_sidebar_flag", False):
+    st.session_state.close_sidebar_flag = False
+    close_sidebar_js()
 
 with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
-    if st.button("📋 Hasta Listesi & Arama", use_container_width=True): yonlendir("hasta_listesi")
-    if st.button("👤 Yeni Hasta Kaydı", use_container_width=True): yonlendir("yeni_hasta")
-    if st.button("🦷 Yeni Muayene", use_container_width=True): yonlendir("yeni_muayene")
-    if st.button("💉 Yeni İşlem", use_container_width=True): yonlendir("yeni_islem")
-    if st.button("⚙️ Ayarlar", use_container_width=True): yonlendir("ayarlar")
-    if st.button("ℹ️ Hakkında", use_container_width=True): yonlendir("hakkinda")
+    if st.button("📋 Hasta Listesi & Arama", use_container_width=True, key="nav_hl"): 
+        yonlendir("hasta_listesi")
+        st.rerun()
+    if st.button("👤 Yeni Hasta Kaydı", use_container_width=True, key="nav_yh"): 
+        yonlendir("yeni_hasta")
+        st.rerun()
+    if st.button("🦷 Yeni Muayene", use_container_width=True, key="nav_ym"): 
+        yonlendir("yeni_muayene")
+        st.rerun()
+    if st.button("💉 Yeni İşlem", use_container_width=True, key="nav_yi"): 
+        yonlendir("yeni_islem")
+        st.rerun()
+    if st.button("⚙️ Ayarlar", use_container_width=True, key="nav_ay"): 
+        yonlendir("ayarlar")
+        st.rerun()
+    if st.button("ℹ️ Hakkında", use_container_width=True, key="nav_hk"): 
+        yonlendir("hakkinda")
+        st.rerun()
 
 st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True): logout()
+if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True, key="nav_exit"): 
+    logout()
 
 # --- ANATOMİK DİŞ DİYAGRAMI ---
 def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True):
@@ -446,18 +470,20 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU BAŞLIĞI VE TIKLANABİLİR LİSTE SİMGELİ BUTON (YENİLENEN KISIM)
-    col_f_baslik, col_f_btn = st.columns([4, 1])
+    # HASTA DEĞERLENDİRME FORMU VE BUTONU (GÜNCELLENEN KISIM)
+    col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
     with col_f_btn:
-        if hedef_hasta_id:
-            if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
+        if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
+            if hedef_hasta_id:
                 st.session_state.show_eval_form = True
                 st.rerun()
+            else:
+                st.warning("Lütfen önce yukarıdan bir hasta seçin!")
 
-    # Pop-up tetikleyicisi
-    if st.session_state.show_eval_form and hedef_hasta_id:
+    # Pop-up pencere tetikleyicisi
+    if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
         show_evaluation_form_popup(hedef_hasta_id)
 
     st.markdown("---")
