@@ -667,6 +667,22 @@ elif st.session_state.sayfa == "hasta_detay":
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
 
+                    # DÜZENLEME BUTONU VE ALANI
+                    if st.button("✏️ Notu / İçeriği Düzenle", key=f"btn_duz_{islem['id']}"):
+                        st.session_state[f"aktif_duzenleme_{islem['id']}"] = True
+
+                    if st.session_state.get(f"aktif_duzenleme_{islem['id']}", False):
+                        yeni_duzenlenen_not = st.text_area("Notu Güncelle", value=genel_not_goster, key=f"txt_duz_{islem['id']}")
+                        c_db1, c_db2 = st.columns(2)
+                        if c_db1.button("💾 Güncellemeyi Kaydet", key=f"btn_kaydet_duz_{islem['id']}", use_container_width=True, type="primary"):
+                            supabase.table("islemler").update({"hekim_notu": yeni_duzenlenen_not}).eq("id", islem['id']).execute()
+                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
+                            st.success("Not başarıyla güncellendi!")
+                            st.rerun()
+                        if c_db2.button("✖️ İptal", key=f"btn_iptal_duz_{islem['id']}", use_container_width=True):
+                            st.session_state[f"aktif_duzenleme_{islem['id']}"] = False
+                            st.rerun()
+
                     if form_cevaplari_data:
                         st.markdown("---")
                         st.markdown("### 📋 Değerlendirme Formu Yanıtları")
