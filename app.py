@@ -260,7 +260,6 @@ def show_evaluation_form_popup(hasta_id):
 
     form_cevaplari = st.session_state.get(f"form_data_{hasta_id}", {})
     
-    # Kaydırılabilir alan (Scroll Container)
     with st.container(height=380):
         for s in sorular_res:
             s_id = s["id"]
@@ -447,7 +446,7 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU VE YANINDAKİ LİSTE SİMGELİ BUTON
+    # HASTA DEĞERLENDİRME FORMU BAŞLIĞI VE TIKLANABİLİR LİSTE SİMGELİ BUTON (YENİLENEN KISIM)
     col_f_baslik, col_f_btn = st.columns([4, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
