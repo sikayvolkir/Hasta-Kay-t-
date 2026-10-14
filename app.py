@@ -509,7 +509,6 @@ elif st.session_state.sayfa == "yeni_muayene":
     genel_not_key = "muayene_genel_not_field"
     muayene_genel_not = st.text_area("Muayene Notu / Açıklama", key=genel_not_key)
     
-    # Doğrudan sayfa içi çizim alanı
     render_drawing_canvas_section(genel_not_key)
 
     genel_cizim_url = st.session_state.get(f"saved_img_{genel_not_key}", "")
@@ -773,7 +772,7 @@ elif st.session_state.sayfa == "ayarlar":
             if st.form_submit_button("Şifreyi Güncelle", use_container_width=True):
                 if not eski_sifre or not yeni_sifre_1 or not yeni_sifre_2:
                     st.warning("Lütfen tüm alanları doldurun.")
-                elif yeni_sifre_1 != yeni_s_2 := yeni_sifre_1 != yeni_sifre_2: # Düzeltildi
+                elif yeni_sifre_1 != yeni_sifre_2:
                     st.error("Yeni şifreler birbiriyle uyuşmuyor.")
                 else:
                     try:
