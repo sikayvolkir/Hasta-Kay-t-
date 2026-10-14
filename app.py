@@ -105,7 +105,7 @@ if not st.session_state.user:
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION (Tıklayınca Paneli Otomatik Kapatan Mekanizma) ---
+# --- SIDEBAR NAVIGATION ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
@@ -125,6 +125,9 @@ with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
     if st.button("⚙️ Ayarlar", use_container_width=True):
         st.session_state.sayfa = "ayarlar"
         st.rerun()
+    if st.button("ℹ️ Hakkında", use_container_width=True):
+        st.session_state.sayfa = "hakkinda"
+        st.rerun()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True): logout()
@@ -139,7 +142,7 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
     else:
         crown_y, root_y = "15", "78"
-        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} C 20,2 70,{root_y} 28,{crown_y} Z")
+        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} 20,2 70,{root_y} 28,{crown_y} Z")
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
 
     fill_crown = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
@@ -183,7 +186,7 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- CANVAS / ÇİZİM POP-UP EKRANI (Sağda 3 İkonik Tuş, Kalınlık, Renk ve Silgi) ---
+# --- ÇİZİM / EL YAZISI POP-UP EKRANI (Çarpı Butonlu ve Açma/Kapama Silgi Modlu) ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
     c_sol, c_sag = st.columns([4, 1])
@@ -191,12 +194,14 @@ def show_input_canvas_popup(field_key, current_text=""):
     with c_sol:
         if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
         if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
-        if f"mode_{field_key}" not in st.session_state: st.session_state[f"mode_{field_key}"] = "freedraw"
+        if f"silgi_aktif_{field_key}" not in st.session_state: st.session_state[f"silgi_aktif_{field_key}"] = False
+
+        aktif_renk = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
 
         canvas_result = st_canvas(
             fill_color="rgba(255, 165, 0, 0.3)",
             stroke_width=st.session_state[f"sw_{field_key}"],
-            stroke_color="#ffffff" if st.session_state[f"mode_{field_key}"] == "eraser" else st.session_state[f"cp_{field_key}"],
+            stroke_color=aktif_renk,
             background_color="#ffffff",
             height=300,
             width=450,
@@ -219,12 +224,13 @@ def show_input_canvas_popup(field_key, current_text=""):
         yeni_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
         if yeni_renk != st.session_state[f"cp_{field_key}"]:
             st.session_state[f"cp_{field_key}"] = yeni_renk
-            st.session_state[f"mode_{field_key}"] = "freedraw"
+            st.session_state[f"silgi_aktif_{field_key}"] = False
             st.rerun()
 
-        # 3. Silgi Simge Butonu
-        if st.button("🧹 Silgi", use_container_width=True):
-            st.session_state[f"mode_{field_key}"] = "eraser"
+        # 3. Silgi Simge Butonu (Basınca silgi moduna geçer, tekrar basınca kapatır)
+        silgi_etiketi = "🧹 Silgi (Açık)" if st.session_state[f"silgi_aktif_{field_key}"] else "🧹 Silgi"
+        if st.button(silgi_etiketi, use_container_width=True):
+            st.session_state[f"silgi_aktif_{field_key}"] = not st.session_state[f"silgi_aktif_{field_key}"]
             st.rerun()
 
     st.markdown("---")
@@ -639,7 +645,7 @@ elif st.session_state.sayfa == "hasta_detay":
                         st.rerun()
 
 # ==============================================================================
-# --- SAYFA 6: AYARLAR SAYFASI ---
+# --- SAYFA 6: AYARLAR SAYFASI (Şifre Değiştirme Özellikli) ---
 # ==============================================================================
 elif st.session_state.sayfa == "ayarlar":
     st.title("⚙️ Ayarlar")
@@ -709,7 +715,38 @@ elif st.session_state.sayfa == "ayarlar":
                 st.download_button("Dosyayı İndir", data=output.getvalue(), file_name="hastalar.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab_account:
-        st.subheader("Oturum")
-        st.write(f"E-posta: {user_email}")
-        if st.button("Çıkış Yap"):
-            logout()
+        st.subheader("Hesap ve Şifre İşlemleri")
+        st.write(f"Kayıtlı E-posta: {user_email}")
+        
+        st.markdown("---")
+        st.subheader("🔒 Şifre Değiştir")
+        with st.form("sifre_degistir_formu"):
+            eski_sifre = st.text_input("Eski Şifre", type="password")
+            yeni_sifre_1 = st.text_input("Yeni Şifre", type="password")
+            yeni_sifre_2 = st.text_input("Yeni Şifre (Tekrar)", type="password")
+            
+            if st.form_submit_button("Şifreyi Güncelle", use_container_width=True):
+                if not eski_sifre or not yeni_sifre_1 or not yeni_sifre_2:
+                    st.warning("Lütfen tüm alanları doldurun.")
+                elif yeni_sifre_1 != yeni_sifre_2:
+                    st.error("Yeni şifreler birbiriyle uyuşmuyor.")
+                else:
+                    try:
+                        # Eski şifreyi doğrula
+                        supabase.auth.sign_in_with_password({"email": user_email, "password": eski_sifre})
+                        # Yeni şifreyi kaydet
+                        supabase.auth.update_user({"password": yeni_sifre_1})
+                        st.success("✅ Şifreniz başarıyla değiştirildi!")
+                    except Exception as err:
+                        st.error(f"Şifre değiştirilemedi. Eski şifrenizi yanlış girmiş olabilirsiniz: {err}")
+
+# ==============================================================================
+# --- SAYFA 7: HAKKINDA SAYFASI ---
+# ==============================================================================
+elif st.session_state.sayfa == "hakkinda":
+    st.title("ℹ️ Hakkında")
+    st.markdown("---")
+    st.markdown("### FETİ YILMAZ")
+    st.markdown("### 2026")
+    st.markdown("### Ulaşım için:")
+    st.markdown("📧 fetiylmaz@gmail.com")
