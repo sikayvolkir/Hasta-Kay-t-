@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Hasta Takip Sistemi",
     page_icon="🩺",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Menüye basılınca varsayılan olarak kapalı kalsın
 )
 
 # --- SUPABASE CONNECTION ---
@@ -105,29 +105,21 @@ if not st.session_state.user:
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION ---
+# --- SIDEBAR NAVIGATION (Tıklanınca Menüyü Kapatan Yapı) ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
+def yonlendir(sayfa_adi):
+    st.session_state.sayfa = sayfa_adi
+    st.rerun()
+
 with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
-    if st.button("📋 Hasta Listesi & Arama", use_container_width=True):
-        st.session_state.sayfa = "hasta_listesi"
-        st.rerun()
-    if st.button("👤 Yeni Hasta Kaydı", use_container_width=True):
-        st.session_state.sayfa = "yeni_hasta"
-        st.rerun()
-    if st.button("🦷 Yeni Muayene", use_container_width=True):
-        st.session_state.sayfa = "yeni_muayene"
-        st.rerun()
-    if st.button("💉 Yeni İşlem", use_container_width=True):
-        st.session_state.sayfa = "yeni_islem"
-        st.rerun()
-    if st.button("⚙️ Ayarlar", use_container_width=True):
-        st.session_state.sayfa = "ayarlar"
-        st.rerun()
-    if st.button("ℹ️ Hakkında", use_container_width=True):
-        st.session_state.sayfa = "hakkinda"
-        st.rerun()
+    if st.button("📋 Hasta Listesi & Arama", use_container_width=True): yonlendir("hasta_listesi")
+    if st.button("👤 Yeni Hasta Kaydı", use_container_width=True): yonlendir("yeni_hasta")
+    if st.button("🦷 Yeni Muayene", use_container_width=True): yonlendir("yeni_muayene")
+    if st.button("💉 Yeni İşlem", use_container_width=True): yonlendir("yeni_islem")
+    if st.button("⚙️ Ayarlar", use_container_width=True): yonlendir("ayarlar")
+    if st.button("ℹ️ Hakkında", use_container_width=True): yonlendir("hakkinda")
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True): logout()
@@ -142,7 +134,7 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
     else:
         crown_y, root_y = "15", "78"
-        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} 20,2 70,{root_y} 28,{crown_y} Z")
+        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} C 20,2 70,{root_y} 28,{crown_y} Z")
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
 
     fill_crown = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
@@ -186,26 +178,29 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- ÇİZİM / EL YAZISI POP-UP EKRANI (Çarpı Butonlu ve Açma/Kapama Silgi Modlu) ---
+# --- RENK ONAYLI, SİLGİ MODLU VE KALICI ÇİZİM POP-UP PENCERESİ ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
     c_sol, c_sag = st.columns([4, 1])
     
-    with c_sol:
-        if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
-        if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
-        if f"silgi_aktif_{field_key}" not in st.session_state: st.session_state[f"silgi_aktif_{field_key}"] = False
+    # State değerlerini ilklendirelim
+    if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
+    if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
+    if f"mode_{field_key}" not in st.session_state: st.session_state[f"mode_{field_key}"] = "freedraw"
 
-        aktif_renk = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
+    with c_sol:
+        c_mode = st.session_state[f"mode_{field_key}"]
+        c_color = st.session_state[f"cp_{field_key}"]
+        c_width = st.session_state[f"sw_{field_key}"]
 
         canvas_result = st_canvas(
             fill_color="rgba(255, 165, 0, 0.3)",
-            stroke_width=st.session_state[f"sw_{field_key}"],
-            stroke_color=aktif_renk,
+            stroke_width=c_width,
+            stroke_color="#ffffff" if c_mode == "eraser" else c_color,
             background_color="#ffffff",
             height=300,
-            width=450,
-            drawing_mode="freedraw",
+            width=420,
+            drawing_mode="freedraw" if c_mode == "freedraw" else "transform",
             key=f"canvas_{field_key}"
         )
 
@@ -217,38 +212,36 @@ def show_input_canvas_popup(field_key, current_text=""):
         yeni_kalinlik = kalinlik_pop.slider("Çizgi Kalınlığı", 1, 20, st.session_state[f"sw_{field_key}"])
         if yeni_kalinlik != st.session_state[f"sw_{field_key}"]:
             st.session_state[f"sw_{field_key}"] = yeni_kalinlik
-            st.rerun()
 
-        # 2. Renk Simge Butonu
+        # 2. Renk Simge Butonu + RENK ONAY BUTONU
         renk_pop = st.popover("🎨 Renk", use_container_width=True)
-        yeni_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
-        if yeni_renk != st.session_state[f"cp_{field_key}"]:
-            st.session_state[f"cp_{field_key}"] = yeni_renk
-            st.session_state[f"silgi_aktif_{field_key}"] = False
+        secilen_gecici_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
+        if renk_pop.button("🎨 Rengi Onayla", use_container_width=True):
+            st.session_state[f"cp_{field_key}"] = secilen_gecici_renk
+            st.session_state[f"mode_{field_key}"] = "freedraw"
             st.rerun()
 
-        # 3. Silgi Simge Butonu (Basınca silgi moduna geçer, tekrar basınca kapatır)
-        silgi_etiketi = "🧹 Silgi (Açık)" if st.session_state[f"silgi_aktif_{field_key}"] else "🧹 Silgi"
-        if st.button(silgi_etiketi, use_container_width=True):
-            st.session_state[f"silgi_aktif_{field_key}"] = not st.session_state[f"silgi_aktif_{field_key}"]
+        # 3. Silgi Modu Butonu (Aç/Kapat Geçişli)
+        silgi_aktif_mi = st.session_state[f"mode_{field_key}"] == "eraser"
+        silgi_label = "🧹 Silgi (Açık)" if silgi_aktif_mi else "🧹 Silgi"
+        if st.button(silgi_label, use_container_width=True):
+            st.session_state[f"mode_{field_key}"] = "freedraw" if silgi_aktif_mi else "eraser"
             st.rerun()
 
     st.markdown("---")
     c_b1, c_b2 = st.columns(2)
-    if c_b1.button("💾 Kaydet", use_container_width=True, type="primary"):
-        if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
-            st.session_state[f"saved_val_{field_key}"] = "[El Yazısı/Çizim Görseli Kaydedildi]"
-        else:
-            st.session_state[f"saved_val_{field_key}"] = current_text
-        st.success("Kaydedildi!")
+    if c_b1.button("💾 Kaydet ve Kapat", use_container_width=True, type="primary"):
+        st.session_state[f"saved_val_{field_key}"] = "[El Yazısı / Çizim İçeriği Kaydedildi]"
+        st.success("Çiziminiz kaydedildi!")
         st.rerun()
-    if c_b2.button("🗑️ Sil / Sıfırla", use_container_width=True):
+
+    if c_b2.button("🗑️ Çizimi Temizle", use_container_width=True):
         st.session_state[f"saved_val_{field_key}"] = ""
         st.rerun()
 
-# --- HASTA DEĞERLENDİRME FORMU KAYDIRMALI POP-UP ---
+# --- POP-UP HASTA DEĞERLENDİRME FORMU ---
 @st.dialog("📋 Hasta Değerlendirme Formu", width="large")
-def show_evaluation_form_popup(hasta_id, islem_id=None):
+def show_evaluation_form_popup(hasta_id):
     st.markdown("Soruları aşağı kaydırarak yanıtlayabilir, her sorunun yanındaki kalem simgesiyle el yazısı/çizim ekleyebilirsiniz.")
     
     try:
@@ -262,7 +255,7 @@ def show_evaluation_form_popup(hasta_id, islem_id=None):
 
     form_cevaplari = {}
     
-    with st.container(height=400):
+    with st.container(height=380):
         for s in sorular_res:
             s_id = s["id"]
             s_metin = s["soru_metni"]
@@ -448,8 +441,9 @@ elif st.session_state.sayfa == "yeni_muayene":
     st.markdown("---")
     st.subheader("📋 Hasta Değerlendirme Formu")
 
-    if hedef_hasta_id and st.button("📝 Formu Aç ve Doldur", use_container_width=True):
-        show_evaluation_form_popup(hedef_hasta_id)
+    if hedef_hasta_id:
+        if st.button("📋 Hasta Değerlendirme Formunu Aç", use_container_width=True, type="primary"):
+            show_evaluation_form_popup(hedef_hasta_id)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
@@ -645,7 +639,7 @@ elif st.session_state.sayfa == "hasta_detay":
                         st.rerun()
 
 # ==============================================================================
-# --- SAYFA 6: AYARLAR SAYFASI (Şifre Değiştirme Özellikli) ---
+# --- SAYFA 6: AYARLAR SAYFASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "ayarlar":
     st.title("⚙️ Ayarlar")
@@ -732,9 +726,7 @@ elif st.session_state.sayfa == "ayarlar":
                     st.error("Yeni şifreler birbiriyle uyuşmuyor.")
                 else:
                     try:
-                        # Eski şifreyi doğrula
                         supabase.auth.sign_in_with_password({"email": user_email, "password": eski_sifre})
-                        # Yeni şifreyi kaydet
                         supabase.auth.update_user({"password": yeni_sifre_1})
                         st.success("✅ Şifreniz başarıyla değiştirildi!")
                     except Exception as err:
