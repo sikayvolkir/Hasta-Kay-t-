@@ -6,13 +6,22 @@ import json
 from supabase import create_client, Client
 from streamlit_drawable_canvas import st_canvas
 
-# --- PAGE CONFIGURATION ---
+# --- PAGE CONFIGURATION & SIDEBAR AUTO-CLOSE SCRIPT ---
 st.set_page_config(
     page_title="Hasta Takip Sistemi",
     page_icon="🩺",
     layout="wide",
-    initial_sidebar_state="collapsed" # Menüye basılınca varsayılan olarak kapalı kalsın
+    initial_sidebar_state="collapsed"
 )
+
+# Menüye basıldığında yan paneli otomatik kapatan CSS/JS enjeksiyonu
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- SUPABASE CONNECTION ---
 @st.cache_resource
@@ -105,7 +114,7 @@ if not st.session_state.user:
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION (Tıklanınca Menüyü Kapatan Yapı) ---
+# --- SIDEBAR NAVIGATION (Tıklayınca Paneli Kapatan Mekanizma) ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
@@ -178,29 +187,28 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- RENK ONAYLI, SİLGİ MODLU VE KALICI ÇİZİM POP-UP PENCERESİ ---
+# --- RENK ONAYLI, FREEDRAW TABANLI SİLGİ MODLU VE KALICI ÇİZİM POP-UP PENCERESİ ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
     c_sol, c_sag = st.columns([4, 1])
     
-    # State değerlerini ilklendirelim
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
     if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
-    if f"mode_{field_key}" not in st.session_state: st.session_state[f"mode_{field_key}"] = "freedraw"
+    if f"silgi_aktif_{field_key}" not in st.session_state: st.session_state[f"silgi_aktif_{field_key}"] = False
 
     with c_sol:
-        c_mode = st.session_state[f"mode_{field_key}"]
-        c_color = st.session_state[f"cp_{field_key}"]
+        # Silgi modu aktifse fırça rengi arkaplan rengine (beyaz) ayarlanır
+        c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
         c_width = st.session_state[f"sw_{field_key}"]
 
         canvas_result = st_canvas(
             fill_color="rgba(255, 165, 0, 0.3)",
             stroke_width=c_width,
-            stroke_color="#ffffff" if c_mode == "eraser" else c_color,
+            stroke_color=c_color,
             background_color="#ffffff",
             height=300,
             width=420,
-            drawing_mode="freedraw" if c_mode == "freedraw" else "transform",
+            drawing_mode="freedraw",
             key=f"canvas_{field_key}"
         )
 
@@ -218,14 +226,13 @@ def show_input_canvas_popup(field_key, current_text=""):
         secilen_gecici_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
         if renk_pop.button("🎨 Rengi Onayla", use_container_width=True):
             st.session_state[f"cp_{field_key}"] = secilen_gecici_renk
-            st.session_state[f"mode_{field_key}"] = "freedraw"
+            st.session_state[f"silgi_aktif_{field_key}"] = False
             st.rerun()
 
         # 3. Silgi Modu Butonu (Aç/Kapat Geçişli)
-        silgi_aktif_mi = st.session_state[f"mode_{field_key}"] == "eraser"
-        silgi_label = "🧹 Silgi (Açık)" if silgi_aktif_mi else "🧹 Silgi"
+        silgi_label = "🧹 Silgi (Açık)" if st.session_state[f"silgi_aktif_{field_key}"] else "🧹 Silgi"
         if st.button(silgi_label, use_container_width=True):
-            st.session_state[f"mode_{field_key}"] = "freedraw" if silgi_aktif_mi else "eraser"
+            st.session_state[f"silgi_aktif_{field_key}"] = not st.session_state[f"silgi_aktif_{field_key}"]
             st.rerun()
 
     st.markdown("---")
@@ -439,11 +446,15 @@ elif st.session_state.sayfa == "yeni_muayene":
             st.write(f"- **Diş {d_no}**: {', '.join(d_bilgi.get('islemler', []))} | Not: {d_bilgi.get('not', '-')}")
 
     st.markdown("---")
-    st.subheader("📋 Hasta Değerlendirme Formu")
-
-    if hedef_hasta_id:
-        if st.button("📋 Hasta Değerlendirme Formunu Aç", use_container_width=True, type="primary"):
-            show_evaluation_form_popup(hedef_hasta_id)
+    
+    # HASTA DEĞERLENDİRME FORMU VE YANINDAKİ SİMGE/BUTON
+    col_f_baslik, col_f_btn = st.columns([3, 1])
+    with col_f_baslik:
+        st.subheader("📋 Hasta Değerlendirme Formu")
+    with col_f_btn:
+        if hedef_hasta_id:
+            if st.button("📋 Hasta Değerlendirme Formu 📑", use_container_width=True, type="primary"):
+                show_evaluation_form_popup(hedef_hasta_id)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
