@@ -14,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Menüye basıldığında yan paneli otomatik kapatan CSS/JS enjeksiyonu
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {
@@ -42,7 +41,7 @@ if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
 if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
-if "yeni_muayene_form_cevaplari" not in st.session_state: st.session_state.yeni_muayene_form_cevaplari = {}
+if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
 
 # İşlem Bazlı Renkler
 if "islem_renkleri" not in st.session_state:
@@ -114,7 +113,7 @@ if not st.session_state.user:
 user_id = st.session_state.user.id
 user_email = st.session_state.user.email
 
-# --- SIDEBAR NAVIGATION (Tıklayınca Paneli Kapatan Mekanizma) ---
+# --- SIDEBAR NAVIGATION ---
 st.sidebar.title("🩺 Hasta Takip")
 st.sidebar.caption(f"👤 {user_email}")
 
@@ -143,7 +142,7 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
     else:
         crown_y, root_y = "15", "78"
-        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} C 20,2 70,{root_y} 28,{crown_y} Z")
+        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} 20,2 70,{root_y} 28,{crown_y} Z")
         rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
 
     fill_crown = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
@@ -187,7 +186,7 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- RENK ONAYLI, FREEDRAW TABANLI SİLGİ MODLU VE KALICI ÇİZİM POP-UP PENCERESİ ---
+# --- ÇİZİM / EL YAZISI POP-UP PENCERESİ ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
     c_sol, c_sag = st.columns([4, 1])
@@ -197,7 +196,6 @@ def show_input_canvas_popup(field_key, current_text=""):
     if f"silgi_aktif_{field_key}" not in st.session_state: st.session_state[f"silgi_aktif_{field_key}"] = False
 
     with c_sol:
-        # Silgi modu aktifse fırça rengi arkaplan rengine (beyaz) ayarlanır
         c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
         c_width = st.session_state[f"sw_{field_key}"]
 
@@ -215,13 +213,11 @@ def show_input_canvas_popup(field_key, current_text=""):
     with c_sag:
         st.markdown("<div style='text-align:center; font-weight:bold; margin-bottom:10px;'>Araçlar</div>", unsafe_allow_html=True)
         
-        # 1. Kalınlık Simge Butonu
         kalinlik_pop = st.popover("⚫ Kalınlık", use_container_width=True)
         yeni_kalinlik = kalinlik_pop.slider("Çizgi Kalınlığı", 1, 20, st.session_state[f"sw_{field_key}"])
         if yeni_kalinlik != st.session_state[f"sw_{field_key}"]:
             st.session_state[f"sw_{field_key}"] = yeni_kalinlik
 
-        # 2. Renk Simge Butonu + RENK ONAY BUTONU
         renk_pop = st.popover("🎨 Renk", use_container_width=True)
         secilen_gecici_renk = renk_pop.color_picker("Renk Seç", st.session_state[f"cp_{field_key}"])
         if renk_pop.button("🎨 Rengi Onayla", use_container_width=True):
@@ -229,7 +225,6 @@ def show_input_canvas_popup(field_key, current_text=""):
             st.session_state[f"silgi_aktif_{field_key}"] = False
             st.rerun()
 
-        # 3. Silgi Modu Butonu (Aç/Kapat Geçişli)
         silgi_label = "🧹 Silgi (Açık)" if st.session_state[f"silgi_aktif_{field_key}"] else "🧹 Silgi"
         if st.button(silgi_label, use_container_width=True):
             st.session_state[f"silgi_aktif_{field_key}"] = not st.session_state[f"silgi_aktif_{field_key}"]
@@ -242,14 +237,14 @@ def show_input_canvas_popup(field_key, current_text=""):
         st.success("Çiziminiz kaydedildi!")
         st.rerun()
 
-    if c_b2.button("🗑️ Çizimi Temizle", use_container_width=True):
+    if c_b2.button("🗑️ Temizle", use_container_width=True):
         st.session_state[f"saved_val_{field_key}"] = ""
         st.rerun()
 
-# --- POP-UP HASTA DEĞERLENDİRME FORMU ---
+# --- HASTA DEĞERLENDİRME FORMU POP-UP (Gerçek Modal Dialog) ---
 @st.dialog("📋 Hasta Değerlendirme Formu", width="large")
 def show_evaluation_form_popup(hasta_id):
-    st.markdown("Soruları aşağı kaydırarak yanıtlayabilir, her sorunun yanındaki kalem simgesiyle el yazısı/çizim ekleyebilirsiniz.")
+    st.markdown("Soruları aşağı kaydırarak sırayla yanıtlayabilir, yanlarındaki kalem simgesiyle el yazısı veya çizim ekleyebilirsiniz.")
     
     try:
         sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -257,29 +252,34 @@ def show_evaluation_form_popup(hasta_id):
         sorular_res = []
 
     if not sorular_res:
-        st.info("Henüz form sorusu tanımlanmamış. Ayarlardan soru ekleyebilirsiniz.")
+        st.info("Henüz form sorusu tanımlanmamış. Lütfen Ayarlar sayfasından soru ekleyin.")
+        if st.button("Kapat", use_container_width=True):
+            st.session_state.show_eval_form = False
+            st.rerun()
         return
 
-    form_cevaplari = {}
+    form_cevaplari = st.session_state.get(f"form_data_{hasta_id}", {})
     
+    # Kaydırılabilir alan (Scroll Container)
     with st.container(height=380):
         for s in sorular_res:
             s_id = s["id"]
             s_metin = s["soru_metni"]
             f_key = f"form_f_{hasta_id}_{s_id}"
             
-            def_val = st.session_state.get(f"saved_val_{f_key}", "")
+            def_val = form_cevaplari.get(s_metin, st.session_state.get(f"saved_val_{f_key}", ""))
             
             col_s1, col_s2 = st.columns([5, 1])
             cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
             form_cevaplari[s_metin] = cevap
             
-            if col_s2.button("✏️", key=f"btn_form_canvas_{f_key}", use_container_width=True):
+            if col_s2.button("✏️", key=f"btn_form_canvas_{f_key}", help="El Yazısı / Çizim Ekle", use_container_width=True):
                 show_input_canvas_popup(f_key, cevap)
 
     st.markdown("---")
-    if st.button("💾 Formu Kaydet", use_container_width=True, type="primary"):
+    if st.button("💾 Formu Kaydet ve Kapat", use_container_width=True, type="primary"):
         st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
+        st.session_state.show_eval_form = False
         st.success("Form başarıyla kaydedildi.")
         st.rerun()
 
@@ -447,14 +447,19 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU VE YANINDAKİ SİMGE/BUTON
-    col_f_baslik, col_f_btn = st.columns([3, 1])
+    # HASTA DEĞERLENDİRME FORMU VE YANINDAKİ LİSTE SİMGELİ BUTON
+    col_f_baslik, col_f_btn = st.columns([4, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
     with col_f_btn:
         if hedef_hasta_id:
-            if st.button("📋 Hasta Değerlendirme Formu 📑", use_container_width=True, type="primary"):
-                show_evaluation_form_popup(hedef_hasta_id)
+            if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
+                st.session_state.show_eval_form = True
+                st.rerun()
+
+    # Pop-up tetikleyicisi
+    if st.session_state.show_eval_form and hedef_hasta_id:
+        show_evaluation_form_popup(hedef_hasta_id)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
