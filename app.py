@@ -4,6 +4,7 @@ import pandas as pd
 import io
 import json
 from supabase import create_client, Client
+from streamlit_drawable_canvas import st_canvas
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -27,28 +28,30 @@ except Exception as e:
     st.stop()
 
 # --- SESSION STATE INITIALIZATION ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "sayfa" not in st.session_state:
-    st.session_state.sayfa = "hasta_listesi"
-if "secili_hasta_id" not in st.session_state:
-    st.session_state.secili_hasta_id = None
-if "aktif_modal_dis" not in st.session_state:
-    st.session_state.aktif_modal_dis = None
-if "dis_islemleri_gecici" not in st.session_state:
-    st.session_state.dis_islemleri_gecici = {}
-if "yeni_muayene_form_cevaplari" not in st.session_state:
-    st.session_state.yeni_muayene_form_cevaplari = {}
+if "user" not in st.session_state: st.session_state.user = None
+if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
+if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
+if "gecici_fotolar" not in st.session_state: st.session_state.gecici_fotolar = []
+if "duzenlenen_islem_id" not in st.session_state: st.session_state.duzenlenen_islem_id = None
+if "hasta_duzenleme_modu" not in st.session_state: st.session_state.hasta_duzenleme_modu = False
+if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
+if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
+if "yeni_muayene_form_cevaplari" not in st.session_state: st.session_state.yeni_muayene_form_cevaplari = {}
 
-# İşlem Bazlı Renk Eşleme Sözlüğü (Session State)
+# İşlem Bazlı Renkler
 if "islem_renkleri" not in st.session_state:
     st.session_state.islem_renkleri = {
-        "Dolgu": "#3b82f6",     # Mavi
-        "Kanal": "#f59e0b",     # Turuncu
-        "Çekim": "#ef4444",     # Kırmızı
-        "Kron": "#8b5cf6",      # Mor
-        "İmplant": "#10b981"    # Yeşil
+        "Dolgu": "#3b82f6", "Kanal": "#f59e0b", "Çekim": "#ef4444", "Kron": "#8b5cf6", "İmplant": "#10b981"
     }
+
+def get_db_islem_turleri():
+    try:
+        res = supabase.table("islem_turleri").select("tur_adi").execute().data
+        if res:
+            return [t["tur_adi"] for t in res]
+    except Exception:
+        pass
+    return list(st.session_state.islem_renkleri.keys())
 
 # --- AUTHENTICATION FUNCTIONS ---
 def login(email, password):
@@ -62,10 +65,8 @@ def login(email, password):
 def register(email, password):
     try:
         res = supabase.auth.sign_up({"email": email, "password": password})
-        if res.user:
-            st.success("Kayıt başarılı! Giriş sekmesinden oturum açabilirsiniz.")
-        else:
-            st.info("Kayıt oluşturuldu, e-posta doğrulamasını kontrol edin.")
+        if res.user: st.success("Kayıt başarılı! Giriş sekmesinden oturum açabilirsiniz.")
+        else: st.info("Kayıt oluşturuldu, e-posta doğrulamasını kontrol edin.")
     except Exception as e:
         st.error(f"Kayıt Başarısız: {e}")
 
@@ -77,13 +78,12 @@ def reset_password(email):
         st.error(f"Şifre sıfırlama hatası: {e}")
 
 def logout():
-    try:
-        supabase.auth.sign_out()
-    except Exception:
-        pass
+    try: supabase.auth.sign_out()
+    except Exception: pass
     st.session_state.user = None
     st.session_state.sayfa = "hasta_listesi"
     st.session_state.secili_hasta_id = None
+    st.session_state.hasta_duzenleme_modu = False
     st.rerun()
 
 # --- LOGIN & REGISTER SCREEN ---
@@ -105,7 +105,7 @@ if not st.session_state.user:
                 reg_password = st.text_input("Şifre (En az 6 karakter)", type="password")
                 if st.form_submit_button("Hesap Oluştur", use_container_width=True):
                     if reg_email and reg_password: register(reg_email, reg_password)
-                    else: st.warning("Lütfen alanları doldurun.")
+                    else: st.warning("Lütfen e-posta ve şifrenizi doldurun.")
         with tab_forgot:
             with st.form("forgot_form"):
                 f_email = st.text_input("Kayıtlı E-posta Adresiniz")
@@ -123,150 +123,124 @@ st.sidebar.caption(f"👤 {user_email}")
 with st.sidebar.expander("📌 Hızlı Menü & İşlemler", expanded=True):
     if st.button("📋 Hasta Listesi & Arama", use_container_width=True):
         st.session_state.sayfa = "hasta_listesi"
+        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("👤 Yeni Hasta Kaydı", use_container_width=True):
         st.session_state.sayfa = "yeni_hasta"
+        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("🦷 Yeni Muayene", use_container_width=True):
         st.session_state.sayfa = "yeni_muayene"
+        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
-    if st.button("💉 Eski Tip İşlem Ekle", use_container_width=True):
+    if st.button("💉 Yeni İşlem", use_container_width=True):
         st.session_state.sayfa = "yeni_islem"
+        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
     if st.button("⚙️ Ayarlar", use_container_width=True):
         st.session_state.sayfa = "ayarlar"
+        st.session_state.hasta_duzenleme_modu = False
         st.rerun()
 
 st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
-    logout()
+if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True): logout()
 
-# --- ANATOMİK DİŞ DİYAGRAMI (ÜST VE ALT ÇENE DÜZGÜN YÖNELİMLİ) ---
+# --- ANATOMİK DİŞ DİYAGRAMI (SİMETRİK / DOĞRU YÖNELİMLİ) ---
 def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True):
     border_color = "#334155"
     d_str = str(dis_no)
     
-    # Üst çene ve alt çene için kök ve taç oryantasyonu (Alt çenede kökler aşağıya, taçlar yukarıya bakar şekilde simetrik çizim)
     if is_upper:
-        crown_y = "45"
-        root_y = "12"
+        crown_y, root_y = "45", "12"
         path_d = f"M8,{crown_y} C 2,{root_y} 12,5 15,{root_y} C 18,{root_y} 22,5 25,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 20,{root_y} C 25,5 35,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 20,{root_y} C 20,2 32,{root_y} 28,{crown_y} Z")
-        rect_w, rect_x, crown_h = (28, 6, 32) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32))
-        label_y = 93
-        box_y = 82
+        rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
     else:
-        # Alt çene: Taçlar üstte (y=15), kökler altta (y=78)
-        crown_y = "15"
-        root_y = "78"
+        crown_y, root_y = "15", "78"
         path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} C 20,2 70,{root_y} 28,{crown_y} Z")
-        rect_w, rect_x, crown_h = (28, 6, 32) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32))
-        label_y = 93
-        box_y = 82
+        rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
 
     fill_crown = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
-
-    svg_content = f'''
+    return f'''
     <svg viewBox="0 0 40 100" width="100%" height="100px" style="background-color: #ffffff; border-radius: 6px; padding: 2px;">
-        <path d="{path_d}" fill="url(#rootGradient_{dis_no}_{int(is_upper)})" stroke="{border_color}" stroke-width="1.1"/>
+        <path d="{path_d}" fill="url(#rg_{dis_no}_{int(is_upper)})" stroke="{border_color}" stroke-width="1.1"/>
         <rect x="{rect_x}" y="{crown_y}" width="{rect_w}" height="{crown_h}" rx="5" fill="{fill_crown}" stroke="{border_color}" stroke-width="1.3"/>
         <rect x="7" y="{box_y}" width="26" height="15" rx="3" fill="#475569" stroke="#1e293b" stroke-width="0.8"/>
         <text x="20" y="{label_y}" font-size="9" font-family="Arial" font-weight="bold" fill="#ffffff" text-anchor="middle">{dis_no}</text>
-        <defs>
-            <linearGradient id="rootGradient_{dis_no}_{int(is_upper)}" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#fecaca" />
-                <stop offset="100%" stop-color="#ffffff" />
-            </linearGradient>
-        </defs>
-    </svg>
-    '''
-    return svg_content
-
-def get_color_for_tooth(d_no):
-    if d_no in st.session_state.dis_islemleri_gecici:
-        islemler_listesi = st.session_state.dis_islemleri_gecici[d_no].get("islemler", [])
-        for islem in islemler_listesi:
-            if islem in st.session_state.islem_renkleri:
-                return st.session_state.islem_renkleri[islem]
-    return "#ffffff"
+        <defs><linearGradient id="rg_{dis_no}_{int(is_upper)}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#fecaca"/><stop offset="100%" stop-color="#ffffff"/></linearGradient></defs>
+    </svg>'''
 
 @st.dialog("🦷 Ağız ve Diş Tedavi Planı Şeması", width="large")
 def show_tooth_diagram_popup(dis_veri_dict=None):
-    if dis_veri_dict is None:
-        dis_veri_dict = st.session_state.dis_islemleri_gecici
-
-    st.markdown(
-        """
-        <div style='display: flex; justify-content: space-between; background-color: #475569; padding: 8px 15px; border-radius: 6px; color: white; font-weight: bold; font-size: 13px; margin-bottom: 10px;'>
-            <span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    if dis_veri_dict is None: dis_veri_dict = st.session_state.dis_islemleri_gecici
+    st.markdown("<div style='background-color: #475569; padding: 8px 15px; border-radius: 6px; color: white; font-weight: bold; font-size: 13px; margin-bottom: 10px; display:flex; justify-content:space-between;'><span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span></div>", unsafe_allow_html=True)
 
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
 
-    st.markdown("<p style='font-size:11px; font-weight:bold; color:#64748b; margin-bottom:2px;'>ÜST ÇENE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px; font-weight:bold; color:#64748b;'>ÜST ÇENE</p>", unsafe_allow_html=True)
     cols_ust = st.columns(16)
     for idx, d_no in enumerate(ust_disler):
         color = "#ffffff"
         if d_no in dis_veri_dict:
             for isl in dis_veri_dict[d_no].get("islemler", []):
-                if isl in st.session_state.islem_renkleri:
-                    color = st.session_state.islem_renkleri[isl]
-        svg = get_detailed_anatomical_tooth_svg(d_no, color, is_upper=True)
-        cols_ust[idx].markdown(svg, unsafe_allow_html=True)
+                if isl in st.session_state.islem_renkleri: color = st.session_state.islem_renkleri[isl]
+        cols_ust[idx].markdown(get_detailed_anatomical_tooth_svg(d_no, color, is_upper=True), unsafe_allow_html=True)
 
     st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
-
-    st.markdown("<p style='font-size:11px; font-weight:bold; color:#64748b; margin-bottom:2px;'>ALT ÇENE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:11px; font-weight:bold; color:#64748b;'>ALT ÇENE</p>", unsafe_allow_html=True)
     cols_alt = st.columns(16)
     for idx, d_no in enumerate(alt_disler):
         color = "#ffffff"
         if d_no in dis_veri_dict:
             for isl in dis_veri_dict[d_no].get("islemler", []):
-                if isl in st.session_state.islem_renkleri:
-                    color = st.session_state.islem_renkleri[isl]
-        svg = get_detailed_anatomical_tooth_svg(d_no, color, is_upper=False)
-        cols_alt[idx].markdown(svg, unsafe_allow_html=True)
+                if isl in st.session_state.islem_renkleri: color = st.session_state.islem_renkleri[isl]
+        cols_alt[idx].markdown(get_detailed_anatomical_tooth_svg(d_no, color, is_upper=False), unsafe_allow_html=True)
 
-    # Lejant (Ayarlardaki işlemlere göre renk açıklamaları)
-    lejant_html = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 25px; font-weight: bold; font-size: 13px; background-color: #f1f5f9; padding: 10px; border-radius: 8px;">'
-    for isl_adi, renk_kodu in st.session_state.islem_renkleri.items():
-        lejant_html += f'<div><span style="color: {renk_kodu}; font-size:16px;">■</span> {isl_adi}</div>'
-    lejant_html += '</div>'
-    st.markdown(lejant_html, unsafe_allow_html=True)
+    lejant = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 25px; font-weight: bold; font-size: 13px; background-color: #f1f5f9; padding: 10px; border-radius: 8px;">'
+    for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
+    st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- YAZI / NOT YAZMA VE ÇİZİM POPUP DİYALOGU ---
-@st.dialog("✏️ Metin / Not Girişi ve Çizim Tuvali", width="large")
+# --- SADELEŞTİRİLMİŞ ÇİZİM VE METİN POPUP EKRANI ---
+@st.dialog("✏️ Metin / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key, current_text=""):
-    st.markdown("Yazı klavyeden yazılabilir veya sağdaki tuval üzerinden mouse ile çizim/not yapılabilir.")
-    
-    secim_tipi = st.radio("Giriş Yöntemi Seçin", ["Klavye (Yazı Yazma)", "Mouse ile Çizim / Not Tuvali"], horizontal=True, key=f"secim_tipi_{field_key}")
-    
-    yazilan_deger = st.text_area("Metin Girişi", value=current_text, key=f"popup_txt_{field_key}")
-    
-    if secim_tipi == "Mouse ile Çizim / Not Tuvali":
-        st.markdown("---")
-        st.markdown("### 🎨 Çizim Tuvali")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            cizgi_kalinligi = st.slider("Çizgi Kalınlığı", 1, 10, 3, key=f"kalinlik_{field_key}")
-        with c2:
-            cizgi_rengi = st.color_picker("Çizgi Rengi", "#000000", key=f"renk_{field_key}")
-        with c3:
-            silgi_modu = st.checkbox("Silgi Modu (Beyaz Kalem)", key=f"silgi_{field_key}")
-            aktif_renk = "#ffffff" if silgi_modu else cizgi_rengi
-            
-        st.info("💡 Not: Çizim alanına fare ile çizim yapabilir ve notlar ekleyebilirsiniz.")
-        # Streamlit bileşeni olarak basit bir canvas alternatifi veya not ekleme alanı
-        cizim_notu = st.text_input("Çizim Notu / Açıklama Ekle", key=f"cizim_not_{field_key}")
-        if cizim_notu:
-            yazilan_deger += f" [Çizim Notu: {cizim_notu} (Kalınlık: {cizgi_kalinligi}, Renk: {aktif_renk})]"
+    # Sol üstteki kayar düğme (Toggle)
+    mod_cizim = st.toggle("Mouse ile Çizim / Tuval Modu", value=False, key=f"tgl_{field_key}")
 
-    if st.button("💾 Kaydet ve Aktar", use_container_width=True, type="primary"):
+    yazilan_deger = st.text_input("Metin Girişi", value=current_text, key=f"txt_popup_{field_key}")
+
+    if mod_cizim:
+        st.markdown("---")
+        # Sağda ikonik minimalist kontroller
+        rc1, rc2, rc3 = st.columns([1, 1, 1])
+        with rc1:
+            kalinlik = st.popover("⚫", use_container_width=True)
+            stroke_width = kalinlik.slider("Kalınlık", 1, 15, 3, key=f"sw_{field_key}")
+        with rc2:
+            renk_sec = st.color_picker("", "#000000", label_visibility="collapsed", key=f"cp_{field_key}")
+        with rc3:
+            silgi_aktif = st.checkbox("🧹 Silgi", key=f"slg_{field_key}")
+            aktif_renk = "#ffffff" if silgi_aktif else renk_sec
+
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 165, 0, 0.3)",
+            stroke_width=stroke_width,
+            stroke_color=aktif_renk,
+            background_color="#ffffff",
+            height=250,
+            width=500,
+            drawing_mode="freedraw",
+            key=f"canvas_{field_key}"
+        )
+        if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
+            yazilan_deger += " [Çizim Tuval İçeriği Mevcut]"
+
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button("💾 Kaydet", use_container_width=True, type="primary"):
         st.session_state[f"saved_val_{field_key}"] = yazilan_deger
-        st.success("Başarıyla kaydedildi! Pencereyi kapatabilirsiniz.")
+        st.success("Kaydedildi!")
+        st.rerun()
+    if col_btn2.button("🗑️ Sil / Sıfırla", use_container_width=True):
+        st.session_state[f"saved_val_{field_key}"] = ""
         st.rerun()
 
 # ==============================================================================
@@ -274,6 +248,7 @@ def show_input_canvas_popup(field_key, current_text=""):
 # ==============================================================================
 if st.session_state.sayfa == "hasta_listesi":
     st.title("📋 Hasta Listesi")
+
     arama_metni = st.text_input("🔍 Hasta Adı Soyadı veya Telefon ile Ara...", "")
 
     try:
@@ -282,7 +257,7 @@ if st.session_state.sayfa == "hasta_listesi":
             query = query.ilike("ad_soyad", f"%{arama_metni.strip()}%")
         hastalar = query.execute().data
     except Exception as e:
-        st.error(f"Hata: {e}")
+        st.error(f"Hastalar çekilirken hata oluştu: {e}")
         hastalar = []
 
     if not hastalar:
@@ -307,6 +282,7 @@ if st.session_state.sayfa == "hasta_listesi":
                 with c5:
                     if st.button("🗑️", key=f"sil_h_{hasta['id']}", help="Hastayı Sil"):
                         supabase.table("hastalar").delete().eq("id", hasta["id"]).execute()
+                        st.toast("Hasta silindi.")
                         st.rerun()
                 st.markdown("---")
 
@@ -315,6 +291,7 @@ if st.session_state.sayfa == "hasta_listesi":
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_hasta":
     st.title("👤 Yeni Hasta Kaydı")
+
     with st.form("yeni_hasta_formu", clear_on_submit=True):
         col_sol, col_sag = st.columns([3, 1])
         with col_sol:
@@ -338,13 +315,11 @@ elif st.session_state.sayfa == "yeni_hasta":
                         "ad_soyad": ad_soyad, "cinsiyet": cinsiyet, "dogum_tarihi": dogum_tarihi.isoformat(),
                         "telefon": telefon, "foto_url": foto_url, "kullanici_id": user_id, "kayit_tarihi": datetime.datetime.now().isoformat()
                     }).execute()
-                    st.toast("✅ Hasta başarıyla kaydedildi!")
+                    st.toast("✅ Hasta kaydedildi!")
                     st.session_state.sayfa = "hasta_listesi"
                     st.rerun()
                 except Exception as ex:
                     st.error(f"Hata: {ex}")
-            else:
-                st.warning("Lütfen zorunlu alanları doldurun.")
 
 # ==============================================================================
 # --- SAYFA 3: YENİ MUAYENE VE DİŞ DİYAGRAMI ---
@@ -409,12 +384,7 @@ elif st.session_state.sayfa == "yeni_muayene":
         st.markdown(f"---")
         st.markdown(f"### ⚙️ **{aktif_d} Nolu Diş** İşlem Tanımlama Paneli")
         
-        try:
-            tur_data = supabase.table("islem_turleri").select("tur_adi").execute().data
-            tum_islemler = [t["tur_adi"] for t in tur_data] if tur_data else list(st.session_state.islem_renkleri.keys())
-        except Exception:
-            tum_islemler = list(st.session_state.islem_renkleri.keys())
-
+        tum_islemler = get_db_islem_turleri()
         mevcut_veri = st.session_state.dis_islemleri_gecici.get(aktif_d, {})
 
         with st.form(key=f"dis_form_{aktif_d}"):
@@ -442,9 +412,8 @@ elif st.session_state.sayfa == "yeni_muayene":
             st.write(f"- **Diş {d_no}**: {', '.join(d_bilgi.get('islemler', []))} | Not: {d_bilgi.get('not', '-')}")
 
     st.markdown("---")
-    st.subheader("📋 Hasta Değerlendirme Formu ve Notlar")
+    st.subheader("📋 Hasta Değerlendirme Formu")
 
-    # Form Soruları
     try:
         sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
     except Exception:
@@ -456,14 +425,13 @@ elif st.session_state.sayfa == "yeni_muayene":
             s_metin = s["soru_metni"]
             f_key = f"form_soru_{s_id}"
             
-            # Popup entegrasyonu için değer çekme
             default_val = st.session_state.get(f"saved_val_{f_key}", st.session_state.yeni_muayene_form_cevaplari.get(s_metin, ""))
             
             c_f1, c_f2 = st.columns([5, 1])
             cevap = c_f1.text_input(f"❓ {s_metin}", value=default_val, key=f_key)
             st.session_state.yeni_muayene_form_cevaplari[s_metin] = cevap
             
-            if c_f2.button("✏️ Çiz/Yaz", key=f"btn_popup_{f_key}", use_container_width=True):
+            if c_f2.button("✏️", key=f"btn_popup_{f_key}", use_container_width=True):
                 show_input_canvas_popup(f_key, cevap)
 
     st.markdown("---")
@@ -474,12 +442,12 @@ elif st.session_state.sayfa == "yeni_muayene":
     
     c_n1, c_n2 = st.columns([5, 1])
     muayene_genel_not = c_n1.text_area("Muayene Notu / Açıklama", value=default_genel_not, key=genel_not_key)
-    if c_n2.button("✏️ Notu Çiz/Yaz", key=f"btn_popup_{genel_not_key}", use_container_width=True):
+    if c_n2.button("✏️", key=f"btn_popup_{genel_not_key}", use_container_width=True):
         show_input_canvas_popup(genel_not_key, muayene_genel_not)
 
     muayene_fotolar = st.file_uploader("Görsel Seç", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
-    if st.button("💾 Planı ve Muayeneyi Kaydet", use_container_width=True):
+    if st.button("💾 Planı ve Muayeneyi Kaydet", use_container_width=True, type="primary"):
         if not hedef_hasta_id:
             st.warning("Lütfen geçerli bir hasta seçin.")
         else:
@@ -501,7 +469,7 @@ elif st.session_state.sayfa == "yeni_muayene":
                 }
 
                 supabase.table("islemler").insert(muayene_veri).execute()
-                st.toast("✅ Muayene kaydedildi!")
+                st.toast("✅ Muayene başarıyla kaydedildi!")
                 st.session_state.dis_islemleri_gecici = {}
                 st.session_state.yeni_muayene_form_cevaplari = {}
                 st.session_state.secili_hasta_id = hedef_hasta_id
@@ -511,28 +479,23 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.error(f"Hata: {ex}")
 
 # ==============================================================================
-# --- SAYFA 4: YENİ İŞLEM EKLE SAYFASI ---
+# --- SAYFA 4: YENİ İŞLEM SAYFASI ---
 # ==============================================================================
 elif st.session_state.sayfa == "yeni_islem":
-    st.title("💉 Yeni İşlem Ekle (Hızlı)")
+    st.title("💉 Yeni İşlem Ekle")
     try:
         hastalar_res = supabase.table("hastalar").select("id, ad_soyad, telefon").eq("kullanici_id", user_id).order("ad_soyad").execute().data
     except Exception:
         hastalar_res = []
 
     if not hastalar_res:
-        st.warning("Kayıtlı hasta bulunmuyor.")
+        st.warning("Kayıtlı hastanız bulunmuyor.")
     else:
         hasta_dict = {f"{h['ad_soyad']} ({h['telefon']})": h['id'] for h in hastalar_res}
         secilen_label = st.selectbox("İşlem Yapılacak Hastayı Seçin *", list(hasta_dict.keys()))
         secilen_hasta_id = hasta_dict[secilen_label]
 
-        try:
-            tur_data = supabase.table("islem_turleri").select("tur_adi").execute().data
-            islem_turleri_listesi = [item["tur_adi"] for item in tur_data] if tur_data else list(st.session_state.islem_renkleri.keys())
-        except Exception:
-            islem_turleri_listesi = list(st.session_state.islem_renkleri.keys())
-
+        islem_turleri_listesi = get_db_islem_turleri()
         islem_tarihi = st.date_input("İşlem Tarihi", datetime.date.today())
         islem_turu = st.selectbox("İşlem Türü", islem_turleri_listesi)
         hekim_notu = st.text_area("Hekim Notu / Açıklama")
@@ -542,6 +505,7 @@ elif st.session_state.sayfa == "yeni_islem":
                 "hasta_id": secilen_hasta_id, "islem_tarihi": islem_tarihi.isoformat(),
                 "islem_turu": islem_turu, "hekim_notu": hekim_notu, "kullanici_id": user_id
             }).execute()
+            st.toast("✅ İşlem eklendi.")
             st.session_state.secili_hasta_id = secilen_hasta_id
             st.session_state.sayfa = "hasta_detay"
             st.rerun()
@@ -609,7 +573,6 @@ elif st.session_state.sayfa == "hasta_detay":
                         st.markdown("### 📝 Muayene Notu / Açıklama")
                         st.write(genel_not_goster if genel_not_goster else "-")
                     with col_h2:
-                        # Muayene geçmişinde plan görselini açma butonu
                         if dis_plani_data:
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
                                 show_tooth_diagram_popup(dis_plani_data)
@@ -651,26 +614,26 @@ elif st.session_state.sayfa == "ayarlar":
 
     with tab_renk:
         st.subheader("İşlem Türlerine Göre Diş Şeması Renkleri")
-        st.markdown("Ayarlarda kayıtlı olan işlemler için şemada hangi rengin kullanılacağını buradan belirleyebilirsiniz.")
+        st.markdown("Veritabanınızdaki işlem türlerine karşılık gelen renkleri belirleyebilirsiniz.")
         
-        for islem_adi in list(st.session_state.islem_renkleri.keys()):
-            mevcut_renk = st.session_state.islem_renkleri[islem_adi]
-            secilen_renk = st.color_picker(f"'{islem_adi}' İşlemi Rengi", mevcut_renk, key=f"picker_{islem_adi}")
+        db_turlar = get_db_islem_turleri()
+        for islem_adi in db_turlar:
+            mevcut_renk = st.session_state.islem_renkleri.get(islem_adi, "#3b82f6")
+            secilen_renk = st.color_picker(f"'{islem_adi}' Rengi", mevcut_renk, key=f"picker_{islem_adi}")
             st.session_state.islem_renkleri[islem_adi] = secilen_renk
-        st.success("Renkler güncellendi!")
+        st.success("Renk eşleşmeleri güncel.")
 
     with tab_tur:
         st.subheader("İşlem Türü Yönetimi")
         yeni_tur = st.text_input("Yeni İşlem Türü Adı", placeholder="Örn: Diş Beyazlatma")
         if st.button("İşlem Türü Ekle"):
-            if yeni_tur and yeni_tur not in st.session_state.islem_renkleri:
-                st.session_state.islem_renkleri[yeni_tur] = "#3b82f6"
+            if yeni_tur:
                 try:
                     supabase.table("islem_turleri").insert({"tur_adi": yeni_tur}).execute()
-                except Exception:
-                    pass
-                st.success("İşlem türü eklendi.")
-                st.rerun()
+                    st.success("İşlem türü eklendi.")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Hata: {ex}")
 
         try:
             turler = supabase.table("islem_turleri").select("*").execute().data
@@ -681,8 +644,6 @@ elif st.session_state.sayfa == "ayarlar":
             col1.write(t['tur_adi'])
             if col2.button("Sil", key=f"t_sil_{t['id']}"):
                 supabase.table("islem_turleri").delete().eq("id", t['id']).execute()
-                if t['tur_adi'] in st.session_state.islem_renkleri:
-                    del st.session_state.islem_renkleri[t['tur_adi']]
                 st.rerun()
 
     with tab_form_soru:
