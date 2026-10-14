@@ -4,3 +4,4 @@ supabase
 pandas
 openpyxl
 gotrue
+supabase-drawable-canvas
