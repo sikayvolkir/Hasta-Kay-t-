@@ -209,7 +209,7 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- ÇİZİM / EL YAZISI POP-UP PENCERESİ (HATASIZ VE KAPANMAYAN SİLGİ) ---
+# --- ÇİZİM / EL YAZISI POP-UP PENCERESİ (GÜVENLİ KAYDETME) ---
 @st.dialog("✏️ El Yazısı / Çizim Alanı", width="medium")
 def show_input_canvas_popup(field_key):
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
@@ -259,17 +259,20 @@ def show_input_canvas_popup(field_key):
         if canvas_result.json_data is not None:
             st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
             
-        if canvas_result.image_data is not None:
+        # Hatayı önlemek için image_data yerine doğrudan json_data nesnelerini kontrol ediyoruz
+        if canvas_result.json_data and len(canvas_result.json_data.get("objects", [])) > 0:
             try:
-                img_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
-                buffered = io.BytesIO()
-                img_pil.save(buffered, format="PNG")
-                img_bytes = buffered.getvalue()
-                
-                dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
-                supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
-                img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-                st.session_state[f"saved_img_{field_key}"] = img_url
+                # Pillow kullanarak boş/beyaz tuval üzerine çizim nesnelerini işleyebiliriz ya da canvas_result.image_data çağrısını güvenli yapabiliriz
+                if canvas_result.image_data is not None:
+                    img_pil = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+                    buffered = io.BytesIO()
+                    img_pil.save(buffered, format="PNG")
+                    img_bytes = buffered.getvalue()
+                    
+                    dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
+                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
+                    img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
+                    st.session_state[f"saved_img_{field_key}"] = img_url
             except Exception:
                 pass
 
