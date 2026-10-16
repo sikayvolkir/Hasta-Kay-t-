@@ -164,18 +164,21 @@ st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True, key="nav_exit"): 
     logout()
 
-# --- ANATOMİK DİŞ DİYAGRAMI ---
+# --- BİREBİR AYNI ANATOMİK DİŞ DİYAGRAMI (ALT VE ÜST ÇENE İÇİN ORTAK) ---
 def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=True):
     border_color = "#334155"
     d_str = str(dis_no)
+    
+    # Alt ve üst çene için tam uyumlu, standart ölçü ve koordinat yapısı
     if is_upper:
         crown_y, root_y = "45", "12"
-        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 15,{root_y} C 18,{root_y} 22,5 25,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 20,{root_y} C 25,5 35,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 20,{root_y} C 20,2 32,{root_y} 28,{crown_y} Z")
-        rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
+        label_y, box_y = 93, 82
     else:
         crown_y, root_y = "15", "78"
-        path_d = f"M8,{crown_y} C 2,{root_y} 12,5 75,{root_y} C 18,{root_y} 22,5 75,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 70,{root_y} C 25,5 70,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 70,{root_y} 20,2 70,{root_y} 28,{crown_y} Z")
-        rect_w, rect_x, crown_h, label_y, box_y = (28, 6, 32, 93, 82) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32, 93, 82) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32, 93, 82))
+        label_y, box_y = 93, 82
+
+    path_d = f"M8,{crown_y} C 2,{root_y} 12,5 15,{root_y} C 18,{root_y} 22,5 25,{root_y} C 28,{root_y} 38,5 32,{crown_y} Z" if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else (f"M10,{crown_y} C 5,{root_y} 15,5 20,{root_y} C 25,5 35,{root_y} 30,{crown_y} Z" if d_str in ["15","14","24","25","45","44","35","34"] else f"M12,{crown_y} C 8,{root_y} 20,2 20,{root_y} C 20,2 32,{root_y} 28,{crown_y} Z")
+    rect_w, rect_x, crown_h = (28, 6, 32) if d_str in ["18","17","16","26","27","28","48","47","46","36","37","38"] else ((24, 8, 32) if d_str in ["15","14","24","25","45","44","35","34"] else (22, 9, 32))
 
     fill_crown = durumsal_renk if durumsal_renk != "#ffffff" else "#ffffff"
     return f'''
@@ -218,7 +221,7 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- POP-UP ÇİZİM MODALİ ---
+# --- POP-UP ÇİZİM MODALİ (ÇARPI İLE KAPATILDIĞINDA OTOMATİK KAYIT) ---
 @st.dialog("✏️ El Yazısı / Çizim Ekle", width="large")
 def show_input_canvas_popup(field_key):
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
@@ -260,7 +263,7 @@ def show_input_canvas_popup(field_key):
         if silgi_durumu != st.session_state[f"silgi_aktif_{field_key}"]:
             st.session_state[f"silgi_aktif_{field_key}"] = silgi_durumu
 
-    # Otomatik kaydetme mantığı (Çarpıya basılsa dahi veriyi korur ve modal açılmasını önler)
+    # Çarpı (X) veya modal dışına tıklanarak kapatıldığında da veriyi otomatik kaydet
     has_content = False
     if canvas_result.json_data is not None:
         st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
@@ -296,7 +299,7 @@ def show_input_canvas_popup(field_key):
         st.session_state.aktif_canvas_modal_key = None
         st.rerun()
 
-# --- SARI NOKTA İNDİKATÖRLÜ POP-UP ÇİZİM BUTONU ---
+# --- SARI NOKTA İNDİKATÖRLÜ ÇİZİM BUTONU ---
 def render_canvas_trigger_button(field_key, button_label="✏️ Elle Çizim / Not Ekle"):
     dolu_mu = bool(st.session_state.get(f"saved_img_{field_key}", ""))
     label = f"🟡 {button_label}" if dolu_mu else button_label
@@ -304,9 +307,67 @@ def render_canvas_trigger_button(field_key, button_label="✏️ Elle Çizim / N
         st.session_state.aktif_canvas_modal_key = field_key
         st.rerun()
 
-# YALNIZCA KULLANICI AÇIKÇA BUTONA TIKLADIĞINDA ÇİZİM POP-UP'INI GÖSTER
 if st.session_state.get("aktif_canvas_modal_key"):
     show_input_canvas_popup(st.session_state.aktif_canvas_modal_key)
+
+# --- HASTA DEĞERLENDİRME FORMU GERÇEK POP-UP (@st.dialog) ---
+@st.dialog("📋 Hasta Değerlendirme Formu", width="large")
+def show_evaluation_form_popup(hasta_id):
+    st.markdown("Soruları yanıtlayabilir, yanlarındaki çizim butonu ile detay ekleyebilirsiniz.")
+    
+    try:
+        sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
+    except Exception:
+        sorular_res = []
+
+    if not sorular_res:
+        st.info("Henüz form sorusu tanımlanmamış. Lütfen Ayarlar sayfasından soru ekleyin.")
+        if st.button("Kapat", use_container_width=True):
+            st.session_state.show_eval_form = False
+            st.rerun()
+        return
+
+    form_cevaplari = st.session_state.get(f"form_data_{hasta_id}", {})
+    
+    with st.container(height=420):
+        for s in sorular_res:
+            s_id = s["id"]
+            s_metin = s["soru_metni"]
+            f_key = f"form_f_{hasta_id}_{s_id}"
+            
+            def_val = form_cevaplari.get(s_metin, "")
+            col_s1, col_s2 = st.columns([4, 1])
+            cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
+            form_cevaplari[s_metin] = cevap
+            st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
+
+            with col_s2:
+                st.write("")
+                st.write("")
+                render_canvas_trigger_button(f_key, "✏️ Çizim")
+
+            img_goster = st.session_state.get(f"saved_img_{f_key}", "")
+            if img_goster:
+                st.image(img_goster, width=220, caption="Kaydedilen Çizim")
+            st.markdown("---")
+
+    col_bp1, col_bp2 = st.columns(2)
+    if col_bp1.button("💾 Kaydet ve Kapat", key="btn_popup_save_form", use_container_width=True, type="primary"):
+        st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
+        st.session_state.show_eval_form = False
+        st.rerun()
+
+    if col_bp2.button("🧹 Temizle", key="btn_popup_clear_form", use_container_width=True):
+        st.session_state[f"form_data_{hasta_id}"] = {}
+        for s in sorular_res:
+            fk = f"form_f_{hasta_id}_{s['id']}"
+            st.session_state[f"saved_img_{fk}"] = ""
+            st.session_state[f"canvas_data_{fk}"] = None
+        st.rerun()
+
+# GERÇEK POP-UP TETİKLEYİCİSİ (Çarpı ile kapatıldığında da verileri korur ve kaydeder)
+if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
+    show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -481,71 +542,18 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU BUTONU VE OTOMATİK KAYDETME ÖZELLİKLİ EKRAN
+    # HASTA DEĞERLENDİRME FORMU BUTONU (POP-UP TETİKLEYİCİ)
     col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
     with col_f_btn:
-        if st.button("📑 Formu Aç / Kapat", key="btn_ac_eval_form", use_container_width=True, type="primary"):
+        if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
             if hedef_hasta_id:
-                st.session_state.show_eval_form = not st.session_state.get("show_eval_form", False)
+                st.session_state.show_eval_form = True
+                st.session_state.secili_hasta_id_for_eval = hedef_hasta_id
                 st.rerun()
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
-
-    # DEĞERLENDİRME FORMU POP-UP PANENLİ (OTOMATİK KAYITLI & TEMİZLE BUTONLU)
-    if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
-        with st.container(border=True):
-            st.markdown("### 📋 Hasta Değerlendirme Formu")
-            
-            try:
-                sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
-            except Exception:
-                sorular_res = []
-
-            if not sorular_res:
-                st.info("Henüz form sorusu tanımlanmamış. Lütfen Ayarlar sayfasından soru ekleyin.")
-            else:
-                form_cevaplari = st.session_state.get(f"form_data_{hedef_hasta_id}", {})
-                
-                with st.container(height=420):
-                    for s in sorular_res:
-                        s_id = s["id"]
-                        s_metin = s["soru_metni"]
-                        f_key = f"form_f_{hedef_hasta_id}_{s_id}"
-                        
-                        def_val = form_cevaplari.get(s_metin, "")
-                        col_s1, col_s2 = st.columns([4, 1])
-                        cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
-                        # Girilen her değeri canlı kaydederek çarpı ile kapatmalarda veri kaybını engeller
-                        form_cevaplari[s_metin] = cevap
-                        st.session_state[f"form_data_{hedef_hasta_id}"] = form_cevaplari
-                        
-                        with col_s2:
-                            st.write("")
-                            st.write("")
-                            render_canvas_trigger_button(f_key, "✏️ Çizim")
-
-                        img_goster = st.session_state.get(f"saved_img_{f_key}", "")
-                        if img_goster:
-                            st.image(img_goster, width=220, caption="Kaydedilen Çizim")
-                        st.markdown("---")
-
-                col_b_f1, col_b_f2 = st.columns(2)
-                if col_b_f1.button("💾 Kaydet ve Kapat", key="btn_save_form_main", use_container_width=True, type="primary"):
-                    st.session_state[f"form_data_{hedef_hasta_id}"] = form_cevaplari
-                    st.session_state.show_eval_form = False
-                    st.success("Form başarıyla kaydedildi.")
-                    st.rerun()
-
-                if col_b_f2.button("🧹 Temizle", key="btn_clear_form_main", use_container_width=True):
-                    st.session_state[f"form_data_{hedef_hasta_id}"] = {}
-                    for s in sorular_res:
-                        fk = f"form_f_{hedef_hasta_id}_{s['id']}"
-                        st.session_state[f"saved_img_{fk}"] = ""
-                        st.session_state[f"canvas_data_{fk}"] = None
-                    st.success("Tüm yanıtlar ve çizimler temizlendi.")
-                    st.rerun()
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
