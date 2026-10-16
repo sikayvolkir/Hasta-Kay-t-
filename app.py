@@ -54,6 +54,8 @@ if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis =
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
 if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
 if "aktif_canvas_modal_key" not in st.session_state: st.session_state.aktif_canvas_modal_key = None
+if "show_tooth_diagram" not in st.session_state: st.session_state.show_tooth_diagram = False
+if "current_tooth_diagram_data" not in st.session_state: st.session_state.current_tooth_diagram_data = None
 
 # İşlem Bazlı Renkler
 if "islem_renkleri" not in st.session_state:
@@ -95,6 +97,7 @@ def logout():
     st.session_state.sayfa = "hasta_listesi"
     st.session_state.secili_hasta_id = None
     st.session_state.aktif_canvas_modal_key = None
+    st.session_state.show_tooth_diagram = False
     st.rerun()
 
 # --- LOGIN & REGISTER SCREEN ---
@@ -133,6 +136,8 @@ st.sidebar.caption(f"👤 {user_email}")
 def yonlendir(sayfa_adi):
     st.session_state.sayfa = sayfa_adi
     st.session_state.aktif_canvas_modal_key = None
+    st.session_state.show_eval_form = False
+    st.session_state.show_tooth_diagram = False
     st.session_state.close_sidebar_flag = True
 
 if st.session_state.get("close_sidebar_flag", False):
@@ -191,7 +196,9 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
 
 @st.dialog("🦷 Ağız ve Diş Tedavi Planı Şeması", width="large")
 def show_tooth_diagram_popup(dis_veri_dict=None):
+    if dis_veri_dict is None: dis_veri_dict = st.session_state.current_tooth_diagram_data
     if dis_veri_dict is None: dis_veri_dict = st.session_state.dis_islemleri_gecici
+    
     st.markdown("<div style='background-color: #475569; padding: 8px 15px; border-radius: 6px; color: white; font-weight: bold; font-size: 13px; margin-bottom: 10px; display:flex; justify-content:space-between;'><span>Sinüs Lift (Sol)</span><span>Sinüs Lift (Sağ)</span></div>", unsafe_allow_html=True)
 
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
@@ -219,6 +226,15 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     lejant = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 25px; font-weight: bold; font-size: 13px; background-color: #f1f5f9; padding: 10px; border-radius: 8px;">'
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
+
+    if st.button("✖️ Kapat", use_container_width=True, key="btn_close_tooth_diag"):
+        st.session_state.show_tooth_diagram = False
+        st.session_state.current_tooth_diagram_data = None
+        st.rerun()
+
+# DİŞ ŞEMASI POP-UP TETİKLEYİCİSİ
+if st.session_state.get("show_tooth_diagram", False):
+    show_tooth_diagram_popup(st.session_state.get("current_tooth_diagram_data"))
 
 # --- POP-UP ÇİZİM MODALİ (ÇARPI İLE KAPATILDIĞINDA OTOMATİK KAYIT) ---
 @st.dialog("✏️ El Yazısı / Çizim Ekle", width="large")
@@ -262,7 +278,6 @@ def show_input_canvas_popup(field_key):
         if silgi_durumu != st.session_state[f"silgi_aktif_{field_key}"]:
             st.session_state[f"silgi_aktif_{field_key}"] = silgi_durumu
 
-    # Çarpı (X) veya modal dışına tıklanarak kapatıldığında da veriyi otomatik kaydet
     has_content = False
     if canvas_result.json_data is not None:
         st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
@@ -298,7 +313,6 @@ def show_input_canvas_popup(field_key):
         st.session_state.aktif_canvas_modal_key = None
         st.rerun()
 
-# --- SARI NOKTA İNDİKATÖRLÜ ÇİZİM BUTONU ---
 def render_canvas_trigger_button(field_key, button_label="✏️ Elle Çizim / Not Ekle"):
     dolu_mu = bool(st.session_state.get(f"saved_img_{field_key}", ""))
     label = f"🟡 {button_label}" if dolu_mu else button_label
@@ -350,7 +364,6 @@ def show_evaluation_form_popup(hasta_id):
                 st.image(img_goster, width=220, caption="Kaydedilen Çizim")
             st.markdown("---")
 
-    # Çarpı (X) ile kapatıldığında da verileri otomatik koruyup kaydetmesi için state güncellenir
     st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
 
     col_bp1, col_bp2 = st.columns(2)
@@ -365,6 +378,9 @@ def show_evaluation_form_popup(hasta_id):
             st.session_state[f"saved_img_{fk}"] = ""
             st.session_state[f"canvas_data_{fk}"] = None
         st.rerun()
+
+if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
+    show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -484,7 +500,9 @@ elif st.session_state.sayfa == "yeni_muayene":
         st.subheader("⌨️ Diş Seçim Kutucukları")
     with col_t2:
         if st.button("🖼️ Plan Görselini Göster", use_container_width=True, type="primary"):
-            show_tooth_diagram_popup()
+            st.session_state.current_tooth_diagram_data = st.session_state.dis_islemleri_gecici
+            st.session_state.show_tooth_diagram = True
+            st.rerun()
 
     ust_disler = ["18", "17", "16", "15", "14", "13", "12", "11", "21", "22", "23", "24", "25", "26", "27", "28"]
     alt_disler = ["48", "47", "46", "45", "44", "43", "42", "41", "31", "32", "33", "34", "35", "36", "37", "38"]
@@ -551,10 +569,6 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.rerun()
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
-
-    # GÜVENLİ @st.dialog POP-UP TETİKLEMESİ
-    if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
-        show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
@@ -749,7 +763,9 @@ elif st.session_state.sayfa == "hasta_detay":
                     with col_h2:
                         if dis_plani_data:
                             if st.button("🖼️ Plan Görselini Göster", key=f"btn_gorsel_{islem['id']}", use_container_width=True, type="primary"):
-                                show_tooth_diagram_popup(dis_plani_data)
+                                st.session_state.current_tooth_diagram_data = dis_plani_data
+                                st.session_state.show_tooth_diagram = True
+                                st.rerun()
 
                     if form_cevaplari_data:
                         st.markdown("---")
