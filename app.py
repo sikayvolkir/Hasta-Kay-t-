@@ -52,7 +52,6 @@ if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
 if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
-if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
 if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
 if "aktif_canvas_modal_key" not in st.session_state: st.session_state.aktif_canvas_modal_key = None
 
@@ -320,9 +319,6 @@ def show_evaluation_form_popup(hasta_id):
 
     if not sorular_res:
         st.info("Henüz form sorusu tanımlanmamış. Lütfen Ayarlar sayfasından soru ekleyin.")
-        if st.button("Kapat", use_container_width=True):
-            st.session_state.show_eval_form = False
-            st.rerun()
         return
 
     form_cevaplari = st.session_state.get(f"form_data_{hasta_id}", {})
@@ -344,7 +340,6 @@ def show_evaluation_form_popup(hasta_id):
 
     if st.button("💾 Formu Kaydet ve Kapat", use_container_width=True, type="primary"):
         st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
-        st.session_state.show_eval_form = False
         st.success("Form başarıyla kaydedildi.")
         st.rerun()
 
@@ -528,13 +523,9 @@ elif st.session_state.sayfa == "yeni_muayene":
     with col_f_btn:
         if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
             if hedef_hasta_id:
-                st.session_state.show_eval_form = True
-                st.rerun()
+                show_evaluation_form_popup(hedef_hasta_id)
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
-
-    if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
-        show_evaluation_form_popup(hedef_hasta_id)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
