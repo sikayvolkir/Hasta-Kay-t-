@@ -52,7 +52,6 @@ if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
 if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
-if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
 if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
 if "aktif_canvas_modal_key" not in st.session_state: st.session_state.aktif_canvas_modal_key = None
 
@@ -96,7 +95,6 @@ def logout():
     st.session_state.sayfa = "hasta_listesi"
     st.session_state.secili_hasta_id = None
     st.session_state.aktif_canvas_modal_key = None
-    st.session_state.show_eval_form = False
     st.rerun()
 
 # --- LOGIN & REGISTER SCREEN ---
@@ -135,7 +133,6 @@ st.sidebar.caption(f"👤 {user_email}")
 def yonlendir(sayfa_adi):
     st.session_state.sayfa = sayfa_adi
     st.session_state.aktif_canvas_modal_key = None
-    st.session_state.show_eval_form = False
     st.session_state.close_sidebar_flag = True
 
 if st.session_state.get("close_sidebar_flag", False):
@@ -263,32 +260,33 @@ def show_input_canvas_popup(field_key):
         if silgi_durumu != st.session_state[f"silgi_aktif_{field_key}"]:
             st.session_state[f"silgi_aktif_{field_key}"] = silgi_durumu
 
+    # Otomatik kaydetme mantığı (Çarpıya basılsa dahi veriyi korur ve modal açılmasını önler)
+    has_content = False
+    if canvas_result.json_data is not None:
+        st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
+        if len(canvas_result.json_data.get("objects", [])) > 0:
+            has_content = True
+
+    if has_content:
+        try:
+            img_data_arr = getattr(canvas_result, "image_data", None)
+            if img_data_arr is not None:
+                img_pil = Image.fromarray(img_data_arr.astype('uint8'), 'RGBA')
+                buffered = io.BytesIO()
+                img_pil.save(buffered, format="PNG")
+                img_bytes = buffered.getvalue()
+                
+                dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
+                supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
+                img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
+                st.session_state[f"saved_img_{field_key}"] = img_url
+        except Exception:
+            pass
+
     st.markdown("---")
     col_b1, col_b2 = st.columns(2)
     
-    if col_b1.button("💾 Çizimi Kaydet ve Kapat", key=f"btn_save_{field_key}", use_container_width=True, type="primary"):
-        has_content = False
-        if canvas_result.json_data is not None:
-            st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
-            if len(canvas_result.json_data.get("objects", [])) > 0:
-                has_content = True
-
-        if has_content:
-            try:
-                img_data_arr = getattr(canvas_result, "image_data", None)
-                if img_data_arr is not None:
-                    img_pil = Image.fromarray(img_data_arr.astype('uint8'), 'RGBA')
-                    buffered = io.BytesIO()
-                    img_pil.save(buffered, format="PNG")
-                    img_bytes = buffered.getvalue()
-                    
-                    dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
-                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
-                    img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-                    st.session_state[f"saved_img_{field_key}"] = img_url
-            except Exception:
-                pass
-
+    if col_b1.button("💾 Kaydet ve Kapat", key=f"btn_save_{field_key}", use_container_width=True, type="primary"):
         st.session_state.aktif_canvas_modal_key = None
         st.rerun()
 
@@ -306,7 +304,7 @@ def render_canvas_trigger_button(field_key, button_label="✏️ Elle Çizim / N
         st.session_state.aktif_canvas_modal_key = field_key
         st.rerun()
 
-# YALNIZCA KULLANICI AÇIKÇA BUTONA TIKLADIĞINDA ÇİZİM MODALİNİ GÖSTER
+# YALNIZCA KULLANICI AÇIKÇA BUTONA TIKLADIĞINDA ÇİZİM POP-UP'INI GÖSTER
 if st.session_state.get("aktif_canvas_modal_key"):
     show_input_canvas_popup(st.session_state.aktif_canvas_modal_key)
 
@@ -483,7 +481,7 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU BUTONU VE GÜVENLİ POP-UP KAPSAYICISI
+    # HASTA DEĞERLENDİRME FORMU BUTONU VE OTOMATİK KAYDETME ÖZELLİKLİ EKRAN
     col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
@@ -495,10 +493,10 @@ elif st.session_state.sayfa == "yeni_muayene":
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
 
-    # HATA VERMEYEN, GÜVENLİ EXPANDER/MODAL POP-UP YAPISI
+    # DEĞERLENDİRME FORMU POP-UP PANENLİ (OTOMATİK KAYITLI & TEMİZLE BUTONLU)
     if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
         with st.container(border=True):
-            st.markdown("### 📋 Hasta Değerlendirme Formu (Pop-up Ekranı)")
+            st.markdown("### 📋 Hasta Değerlendirme Formu")
             
             try:
                 sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -519,7 +517,9 @@ elif st.session_state.sayfa == "yeni_muayene":
                         def_val = form_cevaplari.get(s_metin, "")
                         col_s1, col_s2 = st.columns([4, 1])
                         cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
+                        # Girilen her değeri canlı kaydederek çarpı ile kapatmalarda veri kaybını engeller
                         form_cevaplari[s_metin] = cevap
+                        st.session_state[f"form_data_{hedef_hasta_id}"] = form_cevaplari
                         
                         with col_s2:
                             st.write("")
@@ -531,10 +531,20 @@ elif st.session_state.sayfa == "yeni_muayene":
                             st.image(img_goster, width=220, caption="Kaydedilen Çizim")
                         st.markdown("---")
 
-                if st.button("💾 Formu Kaydet ve Kapat", use_container_width=True, type="primary"):
+                col_b_f1, col_b_f2 = st.columns(2)
+                if col_b_f1.button("💾 Kaydet ve Kapat", key="btn_save_form_main", use_container_width=True, type="primary"):
                     st.session_state[f"form_data_{hedef_hasta_id}"] = form_cevaplari
                     st.session_state.show_eval_form = False
                     st.success("Form başarıyla kaydedildi.")
+                    st.rerun()
+
+                if col_b_f2.button("🧹 Temizle", key="btn_clear_form_main", use_container_width=True):
+                    st.session_state[f"form_data_{hedef_hasta_id}"] = {}
+                    for s in sorular_res:
+                        fk = f"form_f_{hedef_hasta_id}_{s['id']}"
+                        st.session_state[f"saved_img_{fk}"] = ""
+                        st.session_state[f"canvas_data_{fk}"] = None
+                    st.success("Tüm yanıtlar ve çizimler temizlendi.")
                     st.rerun()
 
     st.markdown("---")
