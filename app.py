@@ -169,7 +169,6 @@ def get_detailed_anatomical_tooth_svg(dis_no, durumsal_renk="#ffffff", is_upper=
     border_color = "#334155"
     d_str = str(dis_no)
     
-    # Alt ve üst çene için tam uyumlu, standart ölçü ve koordinat yapısı
     if is_upper:
         crown_y, root_y = "45", "12"
         label_y, box_y = 93, 82
@@ -351,9 +350,11 @@ def show_evaluation_form_popup(hasta_id):
                 st.image(img_goster, width=220, caption="Kaydedilen Çizim")
             st.markdown("---")
 
+    # Çarpı (X) ile kapatıldığında da verileri otomatik koruyup kaydetmesi için state güncellenir
+    st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
+
     col_bp1, col_bp2 = st.columns(2)
     if col_bp1.button("💾 Kaydet ve Kapat", key="btn_popup_save_form", use_container_width=True, type="primary"):
-        st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
         st.session_state.show_eval_form = False
         st.rerun()
 
@@ -364,10 +365,6 @@ def show_evaluation_form_popup(hasta_id):
             st.session_state[f"saved_img_{fk}"] = ""
             st.session_state[f"canvas_data_{fk}"] = None
         st.rerun()
-
-# GERÇEK POP-UP TETİKLEYİCİSİ (Çarpı ile kapatıldığında da verileri korur ve kaydeder)
-if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
-    show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -542,7 +539,7 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU BUTONU (POP-UP TETİKLEYİCİ)
+    # HASTA DEĞERLENDİRME FORMU BUTONU (POP-UP TETİKLEYİCİSİ)
     col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
@@ -554,6 +551,10 @@ elif st.session_state.sayfa == "yeni_muayene":
                 st.rerun()
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
+
+    # GÜVENLİ @st.dialog POP-UP TETİKLEMESİ
+    if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
+        show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
     st.markdown("---")
     st.subheader("📝 Genel Notlar ve Görseller")
