@@ -37,7 +37,8 @@ def close_sidebar_js():
 @st.cache_resource
 def init_supabase() -> Client:
     url = st.secrets.get("SUPABASE_URL", "https://zmamzsmfpspenhslskmq.supabase.co")
-    key = st.secrets.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdWBhYmFzZSIsInJlZiI6InptYW16c21mcHNwZW5oc2xza21xIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTg0NTExMSwiZXhwIjoyMTAxNDIxNTExfQ.YYXkpF9F_jk7lGzIOYtB_dOO0IV-NsuCaFUXrvinndY")
+    # Public Anon Key kullanımı (RLS ile tam uyumlu)
+    key = st.secrets.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdWBhYmFzZSIsInJlZiI6InptYW16c21mcHNwZW5oc2xza21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU1MTEsImV4cCI6MjEwMTQyMTUxMX0.YYXkpF9F_jk7lGzIOYtB_dOO0IV-NsuCaFUXrvinndY")
     return create_client(url, key)
 
 try:
@@ -213,12 +214,12 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
                 if isl in st.session_state.islem_renkleri: color = st.session_state.islem_renkleri[isl]
         cols_alt[idx].markdown(get_detailed_anatomical_tooth_svg(d_no, color, is_upper=False), unsafe_allow_html=True)
 
-    lejant = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 25px; font-weight: bold; font-size: 13px; background-color: #f1f5f9; padding: 10px; border-radius: 8px;">'
+    lejant = '<div style="display: flex; flex-wrap: wrap; justify- content: center; gap: 20px; margin-top: 25px; font-weight: bold; font-size: 13px; background-color: #f1f5f9; padding: 10px; border-radius: 8px;">'
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
 # --- BÜYÜK BOYUTLU POP-UP ÇİZİM MODALİ ---
-@st.dialog("✏️ El Yazısı / Çizim Ekle (Geniş Ekran)", width="large")
+@st.dialog("✏️ El Yazısı / Çizim Ekle", width="large")
 def show_input_canvas_popup(field_key):
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
     if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
@@ -484,18 +485,17 @@ elif st.session_state.sayfa == "yeni_muayene":
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
     with col_f_btn:
-        if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
+        if st.button("📑 Formu Aç / Kapat", key="btn_ac_eval_form", use_container_width=True, type="primary"):
             if hedef_hasta_id:
-                st.session_state.show_eval_form = True
+                st.session_state.show_eval_form = not st.session_state.get("show_eval_form", False)
                 st.rerun()
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
 
-    # HASTA DEĞERLENDİRME FORMU (GÜVENLİ CONTAINER KAPSAYICISI)
+    # HASTA DEĞERLENDİRME FORMU KAPSAYICISI
     if st.session_state.get("show_eval_form", False) and hedef_hasta_id:
         with st.container(border=True):
             st.markdown("### 📋 Hasta Değerlendirme Formu")
-            st.markdown("Soruları sırayla yanıtlayabilir, yanlarındaki çizim ikonu ile pop-up çizim alanını açabilirsiniz.")
             
             try:
                 sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -545,7 +545,7 @@ elif st.session_state.sayfa == "yeni_muayene":
     with col_gn2:
         st.write("")
         st.write("")
-        render_canvas_trigger_button(genel_not_key, "✏️ Pop-Up Çizim")
+        render_canvas_trigger_button(genel_not_key, "✏️ Çizim")
 
     genel_cizim_url = st.session_state.get(f"saved_img_{genel_not_key}", "")
     if genel_cizim_url:
@@ -713,7 +713,7 @@ elif st.session_state.sayfa == "hasta_detay":
                             parcalar = notlar_ham.split("[Diş Planı]:")
                             genel_not_goster = parcalar[0].replace("[Muayene Notu]:", "").strip()
                             kalan = parcalar[1]
-                            if "[Form Cevapları]:" in kalan:
+                            if "[Form Cevaplari]:" in kalan:
                                 p2 = kalan.split("[Form Cevapları]:")
                                 dis_plani_data = json.loads(p2[0].strip())
                                 form_cevaplari_data = json.loads(p2[1].strip())
