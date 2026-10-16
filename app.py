@@ -54,6 +54,7 @@ if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis =
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
 if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
 if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
+if "aktif_canvas_modal_key" not in st.session_state: st.session_state.aktif_canvas_modal_key = None
 
 # İşlem Bazlı Renkler
 if "islem_renkleri" not in st.session_state:
@@ -216,82 +217,95 @@ def show_tooth_diagram_popup(dis_veri_dict=None):
     for k, v in st.session_state.islem_renkleri.items(): lejant += f'<div><span style="color: {v}; font-size:16px;">■</span> {k}</div>'
     st.markdown(lejant + '</div>', unsafe_allow_html=True)
 
-# --- DAHİLİ KANVAS WIDGET'I (GENEL NOTLAR İÇİN) ---
-def render_inline_canvas_section(field_key):
+# --- BÜYÜK BOYUTLU POP-UP ÇİZİM MODALİ ---
+@st.dialog("✏️ El Yazısı / Çizim Ekle (Geniş Ekran)", width="large")
+def show_input_canvas_popup(field_key):
     if f"sw_{field_key}" not in st.session_state: st.session_state[f"sw_{field_key}"] = 3
     if f"cp_{field_key}" not in st.session_state: st.session_state[f"cp_{field_key}"] = "#000000"
     if f"silgi_aktif_{field_key}" not in st.session_state: st.session_state[f"silgi_aktif_{field_key}"] = False
 
-    with st.expander("✏️ El Yazısı / Çizim Ekle - Aç/Kapat", expanded=False):
-        c_sol, c_sag = st.columns([4, 1])
+    c_sol, c_sag = st.columns([5, 1])
 
-        with c_sol:
-            c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
-            c_width = st.session_state[f"sw_{field_key}"]
-            initial_drawing = st.session_state.get(f"canvas_data_{field_key}", None)
+    with c_sol:
+        c_color = "#ffffff" if st.session_state[f"silgi_aktif_{field_key}"] else st.session_state[f"cp_{field_key}"]
+        c_width = st.session_state[f"sw_{field_key}"]
+        initial_drawing = st.session_state.get(f"canvas_data_{field_key}", None)
 
-            canvas_result = st_canvas(
-                fill_color="rgba(255, 165, 0, 0.3)",
-                stroke_width=c_width,
-                stroke_color=c_color,
-                background_color="#ffffff",
-                height=280,
-                width=450,
-                drawing_mode="freedraw",
-                initial_drawing=initial_drawing,
-                key=f"canvas_obj_{field_key}"
-            )
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 165, 0, 0.3)",
+            stroke_width=c_width,
+            stroke_color=c_color,
+            background_color="#ffffff",
+            height=480,
+            width=700,
+            drawing_mode="freedraw",
+            initial_drawing=initial_drawing,
+            key=f"canvas_obj_{field_key}"
+        )
 
-        with c_sag:
-            st.markdown("<div style='font-weight:bold; margin-bottom:5px;'>Araçlar</div>", unsafe_allow_html=True)
-            
-            kalinlik_val = st.slider("Kalınlık", 1, 20, st.session_state[f"sw_{field_key}"], key=f"sl_{field_key}")
-            if kalinlik_val != st.session_state[f"sw_{field_key}"]:
-                st.session_state[f"sw_{field_key}"] = kalinlik_val
+    with c_sag:
+        st.markdown("<div style='font-weight:bold; margin-bottom:5px;'>Araçlar</div>", unsafe_allow_html=True)
+        
+        kalinlik_val = st.slider("Kalınlık", 1, 20, st.session_state[f"sw_{field_key}"], key=f"sl_{field_key}")
+        if kalinlik_val != st.session_state[f"sw_{field_key}"]:
+            st.session_state[f"sw_{field_key}"] = kalinlik_val
 
-            secilen_renk = st.color_picker("Renk", st.session_state[f"cp_{field_key}"], key=f"cp_picker_{field_key}")
-            if secilen_renk != st.session_state[f"cp_{field_key}"]:
-                st.session_state[f"cp_{field_key}"] = secilen_renk
-                st.session_state[f"silgi_aktif_{field_key}"] = False
+        secilen_renk = st.color_picker("Renk", st.session_state[f"cp_{field_key}"], key=f"cp_picker_{field_key}")
+        if secilen_renk != st.session_state[f"cp_{field_key}"]:
+            st.session_state[f"cp_{field_key}"] = secilen_renk
+            st.session_state[f"silgi_aktif_{field_key}"] = False
 
-            silgi_durumu = st.checkbox("🧹 Silgi", value=st.session_state[f"silgi_aktif_{field_key}"], key=f"chk_silgi_{field_key}")
-            if silgi_durumu != st.session_state[f"silgi_aktif_{field_key}"]:
-                st.session_state[f"silgi_aktif_{field_key}"] = silgi_durumu
+        silgi_durumu = st.checkbox("🧹 Silgi Modu", value=st.session_state[f"silgi_aktif_{field_key}"], key=f"chk_silgi_{field_key}")
+        if silgi_durumu != st.session_state[f"silgi_aktif_{field_key}"]:
+            st.session_state[f"silgi_aktif_{field_key}"] = silgi_durumu
 
-        col_b1, col_b2 = st.columns(2)
-        if col_b1.button("💾 Çizimi Kaydet", key=f"btn_save_{field_key}", use_container_width=True, type="primary"):
-            has_content = False
-            if canvas_result.json_data is not None:
-                st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
-                if len(canvas_result.json_data.get("objects", [])) > 0:
-                    has_content = True
+    st.markdown("---")
+    col_b1, col_b2 = st.columns(2)
+    
+    if col_b1.button("💾 Çizimi Kaydet ve Kapat", key=f"btn_save_{field_key}", use_container_width=True, type="primary"):
+        has_content = False
+        if canvas_result.json_data is not None:
+            st.session_state[f"canvas_data_{field_key}"] = canvas_result.json_data
+            if len(canvas_result.json_data.get("objects", [])) > 0:
+                has_content = True
 
-            if has_content:
-                try:
-                    img_data_arr = getattr(canvas_result, "image_data", None)
-                    if img_data_arr is not None:
-                        img_pil = Image.fromarray(img_data_arr.astype('uint8'), 'RGBA')
-                        buffered = io.BytesIO()
-                        img_pil.save(buffered, format="PNG")
-                        img_bytes = buffered.getvalue()
-                        
-                        dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
-                        supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
-                        img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
-                        st.session_state[f"saved_img_{field_key}"] = img_url
-                        st.success("Çizim kaydedildi!")
-                except Exception:
-                    pass
+        if has_content:
+            try:
+                img_data_arr = getattr(canvas_result, "image_data", None)
+                if img_data_arr is not None:
+                    img_pil = Image.fromarray(img_data_arr.astype('uint8'), 'RGBA')
+                    buffered = io.BytesIO()
+                    img_pil.save(buffered, format="PNG")
+                    img_bytes = buffered.getvalue()
+                    
+                    dosya_adi = f"draw_{int(datetime.datetime.now().timestamp())}_{field_key}.png"
+                    supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, img_bytes)
+                    img_url = supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi)
+                    st.session_state[f"saved_img_{field_key}"] = img_url
+            except Exception:
+                pass
 
-        if col_b2.button("🗑️ Temizle", key=f"btn_clear_{field_key}", use_container_width=True):
-            st.session_state[f"saved_img_{field_key}"] = ""
-            st.session_state[f"canvas_data_{field_key}"] = None
-            st.rerun()
+        st.session_state.aktif_canvas_modal_key = None
+        st.rerun()
+
+    if col_b2.button("🗑️ Temizle", key=f"btn_clear_{field_key}", use_container_width=True):
+        st.session_state[f"saved_img_{field_key}"] = ""
+        st.session_state[f"canvas_data_{field_key}"] = None
+        st.session_state.aktif_canvas_modal_key = None
+        st.rerun()
+
+# --- SARI NOKTA İNDİKATÖRLÜ POP-UP ÇİZİM BUTONU YARDIMCISI ---
+def render_canvas_trigger_button(field_key, button_label="✏️ Elle Çizim / Not Ekle"):
+    dolu_mu = bool(st.session_state.get(f"saved_img_{field_key}", ""))
+    label = f"🟡 {button_label}" if dolu_mu else button_label
+    if st.button(label, key=f"btn_trig_{field_key}", use_container_width=True):
+        st.session_state.aktif_canvas_modal_key = field_key
+        st.rerun()
 
 # --- HASTA DEĞERLENDİRME FORMU POP-UP ---
 @st.dialog("📋 Hasta Değerlendirme Formu", width="large")
 def show_evaluation_form_popup(hasta_id):
-    st.markdown("Soruları aşağı kaydırarak sırayla yanıtlayabilir, altlarındaki alanla çizim ekleyebilirsiniz.")
+    st.markdown("Soruları sırayla yanıtlayabilir, yanlarındaki çizim ikonu ile pop-up çizim alanını açabilirsiniz.")
     
     try:
         sorular_res = supabase.table("form_sorulari").select("*").eq("kullanici_id", user_id).order("id").execute().data
@@ -314,10 +328,14 @@ def show_evaluation_form_popup(hasta_id):
             f_key = f"form_f_{hasta_id}_{s_id}"
             
             def_val = form_cevaplari.get(s_metin, "")
-            cevap = st.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
+            col_s1, col_s2 = st.columns([4, 1])
+            cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
             form_cevaplari[s_metin] = cevap
             
-            render_inline_canvas_section(f_key)
+            with col_s2:
+                st.write("")
+                st.write("")
+                render_canvas_trigger_button(f_key, "✏️ Çizim")
 
             img_goster = st.session_state.get(f"saved_img_{f_key}", "")
             if img_goster:
@@ -329,6 +347,10 @@ def show_evaluation_form_popup(hasta_id):
         st.session_state.show_eval_form = False
         st.success("Form başarıyla kaydedildi.")
         st.rerun()
+
+# GEÇERLİ AKTİF ÇİZİM MODALİ VARSA POP-UP OLARAK GÖSTER
+if st.session_state.aktif_canvas_modal_key:
+    show_input_canvas_popup(st.session_state.aktif_canvas_modal_key)
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -522,11 +544,14 @@ elif st.session_state.sayfa == "yeni_muayene":
     st.subheader("📝 Genel Notlar ve Görseller")
     
     genel_not_key = "muayene_genel_not_field"
+    col_gn1, col_gn2 = st.columns([4, 1])
     varsayilan_not_val = st.session_state.get("gecici_muayene_notu", "")
-    muayene_genel_not = st.text_area("Muayene Notu / Açıklama", value=varsayilan_not_val, key=genel_not_key)
+    muayene_genel_not = col_gn1.text_area("Muayene Notu / Açıklama", value=varsayilan_not_val, key=genel_not_key)
     
-    # Çizim alanı güvenli expander widget olarak entegre edildi
-    render_inline_canvas_section(genel_not_key)
+    with col_gn2:
+        st.write("")
+        st.write("")
+        render_canvas_trigger_button(genel_not_key, "✏️ Pop-Up Çizim")
 
     genel_cizim_url = st.session_state.get(f"saved_img_{genel_not_key}", "")
     if genel_cizim_url:
@@ -598,7 +623,20 @@ elif st.session_state.sayfa == "yeni_islem":
         islem_turleri_listesi = get_db_islem_turleri()
         islem_tarihi = st.date_input("İşlem Tarihi", datetime.date.today())
         islem_turu = st.selectbox("İşlem Türü", islem_turleri_listesi)
-        hekim_notu = st.text_area("Hekim Notu / Açıklama")
+        
+        islem_not_key = "yeni_islem_cizim_field"
+        col_is1, col_is2 = st.columns([4, 1])
+        hekim_notu = col_is1.text_area("Hekim Notu / Açıklama")
+        
+        with col_is2:
+            st.write("")
+            st.write("")
+            render_canvas_trigger_button(islem_not_key, "✏️ Elle Çizim / Not")
+
+        islem_cizim_url = st.session_state.get(f"saved_img_{islem_not_key}", "")
+        if islem_cizim_url:
+            st.image(islem_cizim_url, caption="Kaydedilen Çizim Görseli", width=280)
+
         islem_fotolar = st.file_uploader("Görsel / Röntgen Ekle", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
         if st.button("💾 İşlemi Kaydet", use_container_width=True, type="primary"):
@@ -609,6 +647,9 @@ elif st.session_state.sayfa == "yeni_islem":
                     supabase.storage.from_("hasta-fotograflari").upload(dosya_adi, foto.getvalue())
                     foto_url_listesi.append(supabase.storage.from_("hasta-fotograflari").get_public_url(dosya_adi))
 
+            if islem_cizim_url and islem_cizim_url not in foto_url_listesi:
+                foto_url_listesi.append(islem_cizim_url)
+
             supabase.table("islemler").insert({
                 "hasta_id": secilen_hasta_id, 
                 "islem_tarihi": islem_tarihi.isoformat(),
@@ -617,6 +658,8 @@ elif st.session_state.sayfa == "yeni_islem":
                 "kullanici_id": user_id,
                 "fotograf_url": ",".join(foto_url_listesi) if foto_url_listesi else None
             }).execute()
+            
+            st.session_state[f"saved_img_{islem_not_key}"] = ""
             st.toast("✅ İşlem eklendi.")
             st.session_state.secili_hasta_id = secilen_hasta_id
             st.session_state.sayfa = "hasta_detay"
@@ -712,7 +755,6 @@ elif st.session_state.sayfa == "hasta_detay":
 
                     st.markdown("---")
                     
-                    # MUAYENEYİ YENİ MUAYENE SAYFASINDA DÜZENLEMEK İÇİN YÖNLENDİRME BUTONU
                     if st.button("✏️ Bu Muayeneyi Düzenle (Muayene Sayfasında Aç)", key=f"btn_duz_sayfa_{islem['id']}", type="primary"):
                         st.session_state.duzenlenen_muayene_id = islem['id']
                         st.session_state.dis_islemleri_gecici = dis_plani_data
