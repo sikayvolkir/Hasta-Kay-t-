@@ -52,6 +52,7 @@ if "sayfa" not in st.session_state: st.session_state.sayfa = "hasta_listesi"
 if "secili_hasta_id" not in st.session_state: st.session_state.secili_hasta_id = None
 if "aktif_modal_dis" not in st.session_state: st.session_state.aktif_modal_dis = None
 if "dis_islemleri_gecici" not in st.session_state: st.session_state.dis_islemleri_gecici = {}
+if "show_eval_form" not in st.session_state: st.session_state.show_eval_form = False
 if "duzenlenen_muayene_id" not in st.session_state: st.session_state.duzenlenen_muayene_id = None
 if "aktif_canvas_modal_key" not in st.session_state: st.session_state.aktif_canvas_modal_key = None
 
@@ -95,6 +96,7 @@ def logout():
     st.session_state.sayfa = "hasta_listesi"
     st.session_state.secili_hasta_id = None
     st.session_state.aktif_canvas_modal_key = None
+    st.session_state.show_eval_form = False
     st.rerun()
 
 # --- LOGIN & REGISTER SCREEN ---
@@ -133,6 +135,7 @@ st.sidebar.caption(f"👤 {user_email}")
 def yonlendir(sayfa_adi):
     st.session_state.sayfa = sayfa_adi
     st.session_state.aktif_canvas_modal_key = None
+    st.session_state.show_eval_form = False
     st.session_state.close_sidebar_flag = True
 
 if st.session_state.get("close_sidebar_flag", False):
@@ -330,8 +333,14 @@ def show_evaluation_form_popup(hasta_id):
             f_key = f"form_f_{hasta_id}_{s_id}"
             
             def_val = form_cevaplari.get(s_metin, "")
-            cevap = st.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
+            col_s1, col_s2 = st.columns([4, 1])
+            cevap = col_s1.text_input(s_metin, value=def_val, key=f"inp_{f_key}")
             form_cevaplari[s_metin] = cevap
+
+            with col_s2:
+                st.write("")
+                st.write("")
+                render_canvas_trigger_button(f_key, "✏️ Çizim")
 
             img_goster = st.session_state.get(f"saved_img_{f_key}", "")
             if img_goster:
@@ -340,8 +349,13 @@ def show_evaluation_form_popup(hasta_id):
 
     if st.button("💾 Formu Kaydet ve Kapat", use_container_width=True, type="primary"):
         st.session_state[f"form_data_{hasta_id}"] = form_cevaplari
+        st.session_state.show_eval_form = False
         st.success("Form başarıyla kaydedildi.")
         st.rerun()
+
+# DEĞERLENDİRME FORMU DIALOG ÇAĞRISI (EN ÜST DÜZEYDE VE GÜVENLİ)
+if st.session_state.get("show_eval_form", False) and st.session_state.get("secili_hasta_id_for_eval"):
+    show_evaluation_form_popup(st.session_state.secili_hasta_id_for_eval)
 
 # ==============================================================================
 # --- SAYFA 1: HASTA LİSTESİ VE ARAMA ---
@@ -516,14 +530,16 @@ elif st.session_state.sayfa == "yeni_muayene":
 
     st.markdown("---")
     
-    # HASTA DEĞERLENDİRME FORMU BUTONU VE POP-UP ÇAĞRISI
+    # HASTA DEĞERLENDİRME FORMU BUTONU VE GÜVENLİ STATE TETİKLEYİCİSİ
     col_f_baslik, col_f_btn = st.columns([3, 1])
     with col_f_baslik:
         st.subheader("📋 Hasta Değerlendirme Formu")
     with col_f_btn:
         if st.button("📑 Formu Aç", key="btn_ac_eval_form", use_container_width=True, type="primary"):
             if hedef_hasta_id:
-                show_evaluation_form_popup(hedef_hasta_id)
+                st.session_state.show_eval_form = True
+                st.session_state.secili_hasta_id_for_eval = hedef_hasta_id
+                st.rerun()
             else:
                 st.warning("Lütfen önce yukarıdan bir hasta seçin!")
 
